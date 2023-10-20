@@ -1,6 +1,6 @@
 {
   "name": "sample",
-  "path": "share/Stable-diffusion/mistoonAnime_v20.safetensors",
+  "path": "share/Stable-diffusion/toonyou_beta3.safetensors",
   "motion_module": "models/motion-module/mm_sd_v15_v2.ckpt",
   "compile": false,
   "seed": [
