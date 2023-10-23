@@ -60,7 +60,9 @@ build:
     - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git#egg=animatediff[stylize_mask]"
 
   run:
-    - pip install --upgrade pip
+    - "pip install --upgrade pip"
+    - "apt-get update && apt-get install -y ffmpeg"
+    - "pip install imageio[ffmpeg]"
 
 # predict.py defines how predictions are run on your model
 predict: "predict.py:Predictor"
