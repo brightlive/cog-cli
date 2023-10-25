@@ -135,6 +135,7 @@ class Predictor(BasePredictor):
             choices=[
                 "realisticVisionV20_v20",
                 "lyriel_v16",
+                "arthemyComics_v50",
                 "majicmixRealistic_v5Preview",
                 "rcnzCartoon3d_v10",
                 "toonyou_beta3",
