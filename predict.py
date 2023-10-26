@@ -102,18 +102,19 @@ class Predictor(BasePredictor):
         ),
         prompt_map: str = Input(
             description="Prompt for changes in animation. Provide 'frame number : prompt at this frame', separate different prompts with '|'. Make sure the frame number does not exceed the length of video (frames)",
-            default="0:ing, waves rising higher | 96: ship navigating through the storm, rain easing off",
+            default="",
+            # default="0:ing, waves rising higher | 96: ship navigating through the storm, rain easing off",
         ),
         tail_prompt: str = Input(
             description="Additional prompt that will be appended at the end of the main prompt or individual prompts in the map",
             default="",
         ),
         negative_prompt: str = Input(
-            default="(worst quality, low quality:1.4), black and white, b&w, sunny, clear skies, calm seas, beach, daytime, ((bright colors)), cartoonish, modern ships, sketchy, unfinished, modern buildings, trees, island",
+            default="",
         ),
         video_length: int = Input(
             description="Length of the video in frames (playback is at 8 fps e.g. 16 frames @ 8 fps is 2 seconds)",
-            default=128,
+            default=16,
             ge=1,
             le=1024,
         ),
