@@ -30,7 +30,7 @@ FAKE_PROMPT_TRAVEL_JSON = """
   ],
   "output":{{
     "format" : "{output_format}",
-    "fps" : {playback_frames_per_second},
+    "fps" : {fps},
     "encode_param":{{
       "crf": 10
     }}
@@ -96,22 +96,22 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
-        head_prompt: str = Input(
+        prompt: str = Input(
             description="Primary animation prompt. If a prompt map is provided, this will be prefixed at the start of every individual prompt in the map",
             default="masterpiece, best quality, a haunting and detailed depiction of a ship at sea, battered by waves, ominous,((dark clouds:1.3)),distant lightning, rough seas, rain, silhouette of the ship against the stormy sky",
         ),
         prompt_map: str = Input(
             description="Prompt for changes in animation. Provide 'frame number : prompt at this frame', separate different prompts with '|'. Make sure the frame number does not exceed the length of video (frames)",
-            default="0: ship steadily moving,((waves crashing against the ship:1.0)) | 32: (((lightning strikes))), distant thunder, ship rocked by waves | 64: ship silhouette,(((heavy rain))),wind howling, waves rising higher | 96: ship navigating through the storm, rain easing off",
+            default="0:ing, waves rising higher | 96: ship navigating through the storm, rain easing off",
         ),
         tail_prompt: str = Input(
             description="Additional prompt that will be appended at the end of the main prompt or individual prompts in the map",
-            default="dark horizon, flashes of lightning illuminating the ship, sailors working hard, ship's lanterns flickering, eerie, mysterious, sails flapping loudly, stormy atmosphere",
+            default="",
         ),
         negative_prompt: str = Input(
             default="(worst quality, low quality:1.4), black and white, b&w, sunny, clear skies, calm seas, beach, daytime, ((bright colors)), cartoonish, modern ships, sketchy, unfinished, modern buildings, trees, island",
         ),
-        frames: int = Input(
+        video_length: int = Input(
             description="Length of the video in frames (playback is at 8 fps e.g. 16 frames @ 8 fps is 2 seconds)",
             default=128,
             ge=1,
@@ -119,17 +119,17 @@ class Predictor(BasePredictor):
         ),
         width: int = Input(
             description="Width of generated video in pixels, must be divisable by 8",
-            default=256,
+            default=512,
             ge=64,
             le=2160,
         ),
         height: int = Input(
             description="Height of generated video in pixels, must be divisable by 8",
-            default=384,
+            default=512,
             ge=64,
             le=2160,
         ),
-        base_model: str = Input(
+        model_name: str = Input(
             description="Choose the base model for animation generation. If 'CUSTOM' is selected, provide a custom model URL in the next parameter",
             default="majicmixRealistic_v5Preview",
             choices=[
@@ -205,7 +205,7 @@ class Predictor(BasePredictor):
             default="mp4",
             choices=["mp4", "gif"],
         ),
-        playback_frames_per_second: int = Input(default=8, ge=1, le=60),
+        fps: int = Input(default=8, ge=1, le=60),
         seed: int = Input(
             description="Seed for different images and reproducibility. Use -1 to randomise seed",
             default=-1,
@@ -218,20 +218,20 @@ class Predictor(BasePredictor):
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
-        if base_model.upper() == "CUSTOM":
-            base_model = self.download_custom_model(custom_base_model_url)
+        if model_name.upper() == "CUSTOM":
+            model_name = self.download_custom_model(custom_base_model_url)
 
         prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
-            dreambooth_path=f"share/Stable-diffusion/{base_model}.safetensors",
+            dreambooth_path=f"share/Stable-diffusion/{model_name}.safetensors",
             output_format=output_format,
             seed=seed,
             steps=steps,
             guidance_scale=guidance_scale,
             prompt_fixed_ratio=prompt_fixed_ratio,
-            head_prompt=head_prompt,
+            head_prompt=prompt,
             tail_prompt=tail_prompt,
             negative_prompt=negative_prompt,
-            playback_frames_per_second=playback_frames_per_second,
+            fps=fps,
             prompt_map=self.transform_prompt_map(prompt_map),
             scheduler=scheduler,
             clip_skip=clip_skip,
@@ -258,7 +258,7 @@ class Predictor(BasePredictor):
             "-H",
             str(height),
             "-L",
-            str(frames),
+            str(video_length),
             "-C",
             str(context),
         ]
