@@ -223,7 +223,7 @@ class Predictor(BasePredictor):
             path = self.download_custom_model(custom_base_model_url)
 
         prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
-            dreambooth_path=f"share/Stable-diffusion/{path}.safetensors",
+            dreambooth_path=f"share/Stable-diffusion/{path}",
             output_format=output_format,
             seed=seed,
             steps=steps,
