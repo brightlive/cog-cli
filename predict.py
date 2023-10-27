@@ -102,7 +102,7 @@ class Predictor(BasePredictor):
         ),
         prompt_map: str = Input(
             description="Prompt for changes in animation. Provide 'frame number : prompt at this frame', separate different prompts with '|'. Make sure the frame number does not exceed the length of video (frames)",
-            default="",
+            default="0:",
             # default="0:ing, waves rising higher | 96: ship navigating through the storm, rain easing off",
         ),
         tail_prompt: str = Input(
