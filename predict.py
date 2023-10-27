@@ -130,7 +130,7 @@ class Predictor(BasePredictor):
             ge=64,
             le=2160,
         ),
-        model_name: str = Input(
+        path: str = Input(
             description="Choose the base model for animation generation. If 'CUSTOM' is selected, provide a custom model URL in the next parameter",
             default="majicmixRealistic_v5Preview",
             choices=[
@@ -219,11 +219,11 @@ class Predictor(BasePredictor):
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
-        if model_name.upper() == "CUSTOM":
-            model_name = self.download_custom_model(custom_base_model_url)
+        if path.upper() == "CUSTOM":
+            path = self.download_custom_model(custom_base_model_url)
 
         prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
-            dreambooth_path=f"share/Stable-diffusion/{model_name}.safetensors",
+            dreambooth_path=f"share/Stable-diffusion/{path}.safetensors",
             output_format=output_format,
             seed=seed,
             steps=steps,
