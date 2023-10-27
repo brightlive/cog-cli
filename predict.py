@@ -132,16 +132,7 @@ class Predictor(BasePredictor):
         ),
         path: str = Input(
             description="Choose the base model for animation generation. If 'CUSTOM' is selected, provide a custom model URL in the next parameter",
-            default="majicmixRealistic_v5Preview",
-            choices=[
-                "realisticVisionV20_v20",
-                "lyriel_v16",
-                "arthemyComics_v50",
-                "majicmixRealistic_v5Preview",
-                "rcnzCartoon3d_v10",
-                "toonyou_beta3",
-                "CUSTOM",
-            ],
+            default="toonyou_beta3.safetensors",
         ),
         custom_base_model_url: str = Input(
             description="Only used when base model is set to 'CUSTOM'. URL of the custom model to download if 'CUSTOM' is selected in the base model. Only downloads from 'https://civitai.com/api/download/models/' are allowed",
