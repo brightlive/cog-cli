@@ -3,6 +3,7 @@
 
 import os
 import re
+import tempfile
 import subprocess
 from cog import BasePredictor, Input, Path
 
@@ -287,4 +288,8 @@ class Predictor(BasePredictor):
         media_path = os.path.join(recent_dir, media_files[0])
         print(f"Identified Media Path: {media_path}")
 
-        return Path(media_path)
+        out_path = Path(tempfile.mkdtemp()) / "output.mp4"
+        os.system(
+            "ffmpeg -i " + str(media_path) + " -movflags faststart -pix_fmt yuv420p -qp 17 " + str(out_path)
+        )
+        return Path(out_path)
