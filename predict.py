@@ -2,6 +2,7 @@
 # https://github.com/replicate/cog/blob/main/docs/python.md
 
 import os
+import shutil
 import re
 import tempfile
 import subprocess
@@ -289,7 +290,23 @@ class Predictor(BasePredictor):
         print(f"Identified Media Path: {media_path}")
 
         out_path = Path(tempfile.mkdtemp()) / "output.mp4"
+
+        # Convert away from hev1 to more widely recognized codec
         os.system(
             "ffmpeg -i " + str(media_path) + " -movflags faststart -pix_fmt yuv420p -qp 17 " + str(out_path)
         )
+
+        parent_dir = os.path.dirname(media_path)
+        grandparent_dir = os.path.dirname(parent_dir)
+
+        # Delete everything in output folder (including any prior gens that may be hanging around)
+        for item in os.listdir(grandparent_dir):
+            item_path = os.path.join(grandparent_dir, item)
+            print(f"Deleting item at path: {item_path}")
+            # Check if it's a file or directory and delete accordingly
+            if os.path.isfile(item_path):
+                os.remove(item_path)
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+
         return Path(out_path)
