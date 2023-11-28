@@ -235,12 +235,15 @@ class Predictor(BasePredictor):
         print(prompt_travel_json)
         print(f"{'-'*80}")
 
-        file_path = "config/prompts/custom_prompt_travel.json"
-        directory = os.path.dirname(file_path)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        with open(file_path, "w") as file:
-            file.write(prompt_travel_json)
+        # os.system("animatediff stylize create-config squidtoy.mp4")
+
+        # file_path = "config/prompts/custom_prompt_travel.json"
+        file_path = "stylize/brianStatic/prompt.json"
+        # directory = os.path.dirname(file_path)
+        # if not os.path.exists(directory):
+        #     os.makedirs(directory)
+        # with open(file_path, "w") as file:
+        # file.write(prompt_travel_json)
 
         cmd = [
             "animatediff",
@@ -299,14 +302,16 @@ class Predictor(BasePredictor):
         parent_dir = os.path.dirname(media_path)
         grandparent_dir = os.path.dirname(parent_dir)
 
-        # Delete everything in output folder (including any prior gens that may be hanging around)
-        for item in os.listdir(grandparent_dir):
-            item_path = os.path.join(grandparent_dir, item)
-            print(f"Deleting item at path: {item_path}")
-            # Check if it's a file or directory and delete accordingly
-            if os.path.isfile(item_path):
-                os.remove(item_path)
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
+        delete = False
+        if delete == True:
+            # Delete everything in output folder (including any prior gens that may be hanging around)
+            for item in os.listdir(grandparent_dir):
+                item_path = os.path.join(grandparent_dir, item)
+                print(f"Deleting item at path: {item_path}")
+                # Check if it's a file or directory and delete accordingly
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
 
         return Path(out_path)
