@@ -1,12 +1,14 @@
 # Prediction interface for Cog ⚙️
 # https://github.com/replicate/cog/blob/main/docs/python.md
 
+import json
 import os
 import shutil
 import re
 import tempfile
 import subprocess
 from cog import BasePredictor, Input, Path
+from animatediff.utils.tagger import get_labels
 
 FAKE_PROMPT_TRAVEL_JSON = """
 {{
@@ -215,7 +217,45 @@ class Predictor(BasePredictor):
         if path.upper() == "CUSTOM":
             path = self.download_custom_model(custom_base_model_url)
 
-        prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
+
+
+        #print(f"{'-'*80}")
+        #print(prompt_travel_json)
+        #print(f"{'-'*80}")
+
+        file_path = "config/prompts/custom_prompt_travel.json"
+
+        img2video = True # Temp
+        if img2video:
+
+            os.system("mkdir input")
+            os.system("cp brian512.png input/00000000.png")
+
+            # os.system("animatediff stylize create-config squidtoy.mp4")
+            prompt_map = get_labels(
+            frame_dir="input",
+            interval=1,
+            general_threshold=0.35,
+            character_threshold=0.85,
+            ignore_tokens=[],
+            with_confidence=True,
+            is_danbooru_format=False,
+            is_cpu = False,
+            )
+            print("prompt_map is " + str(prompt_map['0']))
+
+            with open('stylize.json', 'r', encoding='utf-8') as file:
+                data = json.load(file)
+                data['path'] = 'share/Stable-diffusion/' + path
+                data['prompt_map']['0'] = prompt
+                data['controlnet_map']['controlnet_tile']['controlnet_conditioning_scale'] = 0.1
+                data['controlnet_map']['controlnet_ip2p']['controlnet_conditioning_scale'] = 0.5
+                with open('input/prompt.json', 'w', encoding='utf-8') as file:
+                    json.dump(data, file, indent=4)  # indent=4 for pretty printing
+                    file_path = "input/prompt.json"
+
+        else:
+            prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
             dreambooth_path=f"share/Stable-diffusion/{path}",
             output_format=output_format,
             seed=seed,
@@ -229,21 +269,12 @@ class Predictor(BasePredictor):
             prompt_map=self.transform_prompt_map(prompt_map),
             scheduler=scheduler,
             clip_skip=clip_skip,
-        )
-
-        print(f"{'-'*80}")
-        print(prompt_travel_json)
-        print(f"{'-'*80}")
-
-        # os.system("animatediff stylize create-config squidtoy.mp4")
-
-        # file_path = "config/prompts/custom_prompt_travel.json"
-        file_path = "stylize/brianStatic/prompt.json"
-        # directory = os.path.dirname(file_path)
-        # if not os.path.exists(directory):
-        #     os.makedirs(directory)
-        # with open(file_path, "w") as file:
-        # file.write(prompt_travel_json)
+            )
+            directory = os.path.dirname(file_path)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            with open(file_path, "w") as file:
+                file.write(prompt_travel_json)
 
         cmd = [
             "animatediff",

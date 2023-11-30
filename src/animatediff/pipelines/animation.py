@@ -13,13 +13,22 @@ from diffusers.image_processor import VaeImageProcessor
 from diffusers.loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from diffusers.models import AutoencoderKL, ControlNetModel
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
-from diffusers.schedulers import (DDIMScheduler, DPMSolverMultistepScheduler,
-                                  EulerAncestralDiscreteScheduler,
-                                  EulerDiscreteScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
-from diffusers.utils import (BaseOutput, deprecate, is_accelerate_available,
-                             is_accelerate_version, is_compiled_module,
-                             randn_tensor)
+from diffusers.schedulers import (
+    DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+)
+from diffusers.utils import (
+    BaseOutput,
+    deprecate,
+    is_accelerate_available,
+    is_accelerate_version,
+    is_compiled_module,
+    randn_tensor,
+)
 from einops import rearrange
 from packaging import version
 from tqdm.rich import tqdm
@@ -28,22 +37,22 @@ from transformers import CLIPImageProcessor, CLIPTokenizer
 from animatediff.ip_adapter import IPAdapter, IPAdapterPlus
 from animatediff.models.attention import BasicTransformerBlock
 from animatediff.models.clip import CLIPSkipTextModel
-from animatediff.models.unet import (UNet3DConditionModel,
-                                     UNetMidBlock3DCrossAttn)
-from animatediff.models.unet_blocks import (CrossAttnDownBlock3D,
-                                            CrossAttnUpBlock3D, DownBlock3D,
-                                            UpBlock3D)
-from animatediff.pipelines.context import (get_context_scheduler,
-                                           get_total_steps)
+from animatediff.models.unet import UNet3DConditionModel, UNetMidBlock3DCrossAttn
+from animatediff.models.unet_blocks import CrossAttnDownBlock3D, CrossAttnUpBlock3D, DownBlock3D, UpBlock3D
+from animatediff.pipelines.context import get_context_scheduler, get_total_steps
 from animatediff.utils.model import nop_train
 from animatediff.utils.pipeline import get_memory_format
-from animatediff.utils.util import (end_profile,
-                                    get_tensor_interpolation_method, show_gpu,
-                                    start_profile, stopwatch_record,
-                                    stopwatch_start, stopwatch_stop)
+from animatediff.utils.util import (
+    end_profile,
+    get_tensor_interpolation_method,
+    show_gpu,
+    start_profile,
+    stopwatch_record,
+    stopwatch_start,
+    stopwatch_stop,
+)
 
 logger = logging.getLogger(__name__)
-
 
 
 C_REF_MODE = "write"
@@ -52,7 +61,7 @@ C_REF_MODE = "write"
 def torch_dfs(model: torch.nn.Module):
     result = [model]
     for child in model.children():
-            result += torch_dfs(child)
+        result += torch_dfs(child)
     return result
 
 
@@ -77,7 +86,7 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         LMSDiscreteScheduler,
         PNDMScheduler,
     ]
-    controlnet_map: Dict[ str , ControlNetModel ]
+    controlnet_map: Dict[str, ControlNetModel]
     ip_adapter: IPAdapter = None
 
     def __init__(
@@ -95,7 +104,7 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             DPMSolverMultistepScheduler,
         ],
         feature_extractor: CLIPImageProcessor,
-        controlnet_map: Dict[ str , ControlNetModel ]=None,
+        controlnet_map: Dict[str, ControlNetModel] = None,
     ):
         super().__init__()
 
@@ -161,7 +170,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
         )
         self.controlnet_map = controlnet_map
-
 
     def enable_vae_slicing(self):
         r"""
@@ -305,7 +313,7 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 prompt=prompt,
                 uncond_prompt=negative_prompt if do_classifier_free_guidance else None,
                 max_embeddings_multiples=max_embeddings_multiples,
-                clip_skip=clip_skip
+                clip_skip=clip_skip,
             )
             if prompt_embeds is None:
                 prompt_embeds = prompt_embeds1
@@ -320,7 +328,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         if do_classifier_free_guidance:
             bs_embed, seq_len, _ = negative_prompt_embeds.shape
             negative_prompt_embeds = negative_prompt_embeds.repeat(1, num_videos_per_prompt, 1)
-            negative_prompt_embeds = negative_prompt_embeds.view(bs_embed * num_videos_per_prompt, seq_len, -1)
+            negative_prompt_embeds = negative_prompt_embeds.view(
+                bs_embed * num_videos_per_prompt, seq_len, -1
+            )
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds])
 
         return prompt_embeds
@@ -458,42 +468,46 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         return prompt_embeds
 
-    def interpolate_latents(self, latents: torch.Tensor, interpolation_factor:int, device ):
+    def interpolate_latents(self, latents: torch.Tensor, interpolation_factor: int, device):
         if interpolation_factor < 2:
             return latents
 
         new_latents = torch.zeros(
-                    (latents.shape[0],latents.shape[1],((latents.shape[2]-1) * interpolation_factor)+1, latents.shape[3],latents.shape[4]),
-                    device=latents.device,
-                    dtype=latents.dtype,
-                )
+            (
+                latents.shape[0],
+                latents.shape[1],
+                ((latents.shape[2] - 1) * interpolation_factor) + 1,
+                latents.shape[3],
+                latents.shape[4],
+            ),
+            device=latents.device,
+            dtype=latents.dtype,
+        )
 
         org_video_length = latents.shape[2]
-        rate = [i/interpolation_factor for i in range(interpolation_factor)][1:]
+        rate = [i / interpolation_factor for i in range(interpolation_factor)][1:]
 
         new_index = 0
 
         v0 = None
         v1 = None
 
-        for i0,i1 in zip( range( org_video_length ),range( org_video_length )[1:] ):
-            v0 = latents[:,:,i0,:,:]
-            v1 = latents[:,:,i1,:,:]
+        for i0, i1 in zip(range(org_video_length), range(org_video_length)[1:]):
+            v0 = latents[:, :, i0, :, :]
+            v1 = latents[:, :, i1, :, :]
 
-            new_latents[:,:,new_index,:,:] = v0
+            new_latents[:, :, new_index, :, :] = v0
             new_index += 1
 
             for f in rate:
-                v = get_tensor_interpolation_method()(v0.to(device=device),v1.to(device=device),f)
-                new_latents[:,:,new_index,:,:] = v.to(latents.device)
+                v = get_tensor_interpolation_method()(v0.to(device=device), v1.to(device=device), f)
+                new_latents[:, :, new_index, :, :] = v.to(latents.device)
                 new_index += 1
 
-        new_latents[:,:,new_index,:,:] = v1
+        new_latents[:, :, new_index, :, :] = v1
         new_index += 1
 
         return new_latents
-
-
 
     def decode_latents(self, latents: torch.Tensor):
         video_length = latents.shape[2]
@@ -588,7 +602,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         do_classifier_free_guidance=False,
         guess_mode=False,
     ):
-        image = self.control_image_processor.preprocess(image, height=height, width=width).to(dtype=torch.float32)
+        image = self.control_image_processor.preprocess(image, height=height, width=width).to(
+            dtype=torch.float32
+        )
         image_batch_size = image.shape[0]
 
         if image_batch_size == 1:
@@ -670,9 +686,10 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         latents = latents * self.scheduler.init_noise_sigma
         return latents.to(device, dtype)
 
-
     # from diffusers/examples/community/stable_diffusion_controlnet_reference.py
-    def prepare_ref_latents(self, refimage, batch_size, dtype, device, generator, do_classifier_free_guidance):
+    def prepare_ref_latents(
+        self, refimage, batch_size, dtype, device, generator, do_classifier_free_guidance
+    ):
         refimage = refimage.to(device=device, dtype=self.vae.dtype)
 
         # encode the mask image into latents space so we can concatenate it to the latents
@@ -698,7 +715,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 )
             ref_image_latents = ref_image_latents.repeat(batch_size // ref_image_latents.shape[0], 1, 1, 1)
 
-        ref_image_latents = torch.cat([ref_image_latents] * 2) if do_classifier_free_guidance else ref_image_latents
+        ref_image_latents = (
+            torch.cat([ref_image_latents] * 2) if do_classifier_free_guidance else ref_image_latents
+        )
 
         # aligning device to prevent device errors when concating it with the latent model input
         ref_image_latents = ref_image_latents.to(device=device, dtype=dtype)
@@ -729,13 +748,12 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         _scale_pattern = _scale_pattern * (batch_size // len(_scale_pattern) + 1)
         _scale_pattern = _scale_pattern[:batch_size]
-        _rev_pattern = [1-i for i in _scale_pattern]
+        _rev_pattern = [1 - i for i in _scale_pattern]
 
-        scale_pattern_double = torch.tensor(_scale_pattern*2).to(self.device, dtype=self.unet.dtype)
-        rev_pattern_double = torch.tensor(_rev_pattern*2).to(self.device, dtype=self.unet.dtype)
+        scale_pattern_double = torch.tensor(_scale_pattern * 2).to(self.device, dtype=self.unet.dtype)
+        rev_pattern_double = torch.tensor(_rev_pattern * 2).to(self.device, dtype=self.unet.dtype)
         scale_pattern = torch.tensor(_scale_pattern).to(self.device, dtype=self.unet.dtype)
         rev_pattern = torch.tensor(_rev_pattern).to(self.device, dtype=self.unet.dtype)
-
 
         def hacked_basic_transformer_inner_forward(
             self,
@@ -792,24 +810,33 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                                     **cross_attention_kwargs,
                                 )
 
-                            attn_output = style_fidelity * attn_output_c + (1.0 - style_fidelity) * attn_output_uc
+                            attn_output = (
+                                style_fidelity * attn_output_c + (1.0 - style_fidelity) * attn_output_uc
+                            )
 
                         else:
                             attn_output = attn_output_uc
 
                         attn_org = self.attn1(
                             norm_hidden_states,
-                            encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
+                            encoder_hidden_states=encoder_hidden_states
+                            if self.only_cross_attention
+                            else None,
                             attention_mask=attention_mask,
                             **cross_attention_kwargs,
                         )
 
-                        attn_output = scale_pattern_double[:,None,None] * attn_output + rev_pattern_double[:,None,None] * attn_org
+                        attn_output = (
+                            scale_pattern_double[:, None, None] * attn_output
+                            + rev_pattern_double[:, None, None] * attn_org
+                        )
 
                     else:
                         attn_output = self.attn1(
                             norm_hidden_states,
-                            encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
+                            encoder_hidden_states=encoder_hidden_states
+                            if self.only_cross_attention
+                            else None,
                             attention_mask=attention_mask,
                             **cross_attention_kwargs,
                         )
@@ -820,7 +847,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             if self.attn2 is not None:
                 norm_hidden_states = (
-                    self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
+                    self.norm2(hidden_states, timestep)
+                    if self.use_ada_layer_norm
+                    else self.norm2(hidden_states)
                 )
 
                 # 2. Cross-Attention
@@ -858,7 +887,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             cross_attention_kwargs: Optional[Dict[str, Any]] = None,
             encoder_attention_mask: Optional[torch.FloatTensor] = None,
         ) -> torch.FloatTensor:
-
             eps = 1e-6
 
             hidden_states = self.resnets[0](hidden_states, temb)
@@ -889,7 +917,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         x_uc = (((x - mean) / std) * std_acc) + mean_acc
                         x_c = x_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = x.shape[2]
                             x_c = rearrange(x_c, "b c f h w -> (b f) c h w")
                             x = rearrange(x, "b c f h w -> (b f) c h w")
@@ -901,7 +928,10 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
                         mod_x = style_fidelity * x_c + (1.0 - style_fidelity) * x_uc
 
-                    x = scale_pattern[None,None,:,None,None] * mod_x + rev_pattern[None,None,:,None,None] * x
+                    x = (
+                        scale_pattern[None, None, :, None, None] * mod_x
+                        + rev_pattern[None, None, :, None, None] * x
+                    )
 
                     self.mean_bank = []
                     self.var_bank = []
@@ -919,7 +949,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             return hidden_states
 
-
         def hack_CrossAttnDownBlock3D_forward(
             self,
             hidden_states: torch.FloatTensor,
@@ -934,7 +963,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             # TODO(Patrick, William) - attention mask is not used
             output_states = ()
 
-            for i, (resnet, attn, motion_module) in enumerate(zip(self.resnets, self.attentions, self.motion_modules)):
+            for i, (resnet, attn, motion_module) in enumerate(
+                zip(self.resnets, self.attentions, self.motion_modules)
+            ):
                 hidden_states = resnet(hidden_states, temb)
 
                 hidden_states = attn(
@@ -961,7 +992,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         hidden_states_uc = (((hidden_states - mean) / std) * std_acc) + mean_acc
                         hidden_states_c = hidden_states_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = hidden_states.shape[2]
                             hidden_states = rearrange(hidden_states, "b c f h w -> (b f) c h w")
                             hidden_states_c = rearrange(hidden_states_c, "b c f h w -> (b f) c h w")
@@ -971,9 +1001,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
                 # add motion module
                 hidden_states = (
@@ -1019,7 +1054,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         hidden_states_uc = (((hidden_states - mean) / std) * std_acc) + mean_acc
                         hidden_states_c = hidden_states_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = hidden_states.shape[2]
                             hidden_states = rearrange(hidden_states, "b c f h w -> (b f) c h w")
                             hidden_states_c = rearrange(hidden_states_c, "b c f h w -> (b f) c h w")
@@ -1029,9 +1063,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
                 # add motion module
                 if motion_module:
@@ -1066,7 +1105,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         ):
             eps = 1e-6
             # TODO(Patrick, William) - attention mask is not used
-            for i, (resnet, attn, motion_module) in enumerate(zip(self.resnets, self.attentions, self.motion_modules)):
+            for i, (resnet, attn, motion_module) in enumerate(
+                zip(self.resnets, self.attentions, self.motion_modules)
+            ):
                 # pop res hidden states
                 res_hidden_states = res_hidden_states_tuple[-1]
                 res_hidden_states_tuple = res_hidden_states_tuple[:-1]
@@ -1081,7 +1122,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                     return_dict=False,
                 )[0]
 
-
                 if C_REF_MODE == "write":
                     if gn_auto_machine_weight >= self.gn_weight:
                         var, mean = torch.var_mean(hidden_states, dim=(3, 4), keepdim=True, correction=0)
@@ -1097,7 +1137,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         hidden_states_uc = (((hidden_states - mean) / std) * std_acc) + mean_acc
                         hidden_states_c = hidden_states_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = hidden_states.shape[2]
                             hidden_states = rearrange(hidden_states, "b c f h w -> (b f) c h w")
                             hidden_states_c = rearrange(hidden_states_c, "b c f h w -> (b f) c h w")
@@ -1107,16 +1146,20 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
                 # add motion module
                 if motion_module:
                     hidden_states = motion_module(
                         hidden_states, temb, encoder_hidden_states=encoder_hidden_states
                     )
-
 
             if C_REF_MODE == "read":
                 self.mean_bank = []
@@ -1128,9 +1171,16 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             return hidden_states
 
-        def hacked_UpBlock3D_forward(self, hidden_states, res_hidden_states_tuple, temb=None, upsample_size=None, encoder_hidden_states=None):
+        def hacked_UpBlock3D_forward(
+            self,
+            hidden_states,
+            res_hidden_states_tuple,
+            temb=None,
+            upsample_size=None,
+            encoder_hidden_states=None,
+        ):
             eps = 1e-6
-            for i, (resnet,motion_module) in enumerate(zip(self.resnets, self.motion_modules)):
+            for i, (resnet, motion_module) in enumerate(zip(self.resnets, self.motion_modules)):
                 # pop res hidden states
                 res_hidden_states = res_hidden_states_tuple[-1]
                 res_hidden_states_tuple = res_hidden_states_tuple[:-1]
@@ -1161,16 +1211,19 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
                 if motion_module:
                     hidden_states = motion_module(
                         hidden_states, temb, encoder_hidden_states=encoder_hidden_states
                     )
-
-
 
             if C_REF_MODE == "read":
                 self.mean_bank = []
@@ -1183,7 +1236,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             return hidden_states
 
         if reference_attn:
-            attn_modules = [module for module in torch_dfs(self.unet) if isinstance(module, BasicTransformerBlock)]
+            attn_modules = [
+                module for module in torch_dfs(self.unet) if isinstance(module, BasicTransformerBlock)
+            ]
             attn_modules = sorted(attn_modules, key=lambda x: -x.norm1.normalized_shape[0])
 
             for i, module in enumerate(attn_modules):
@@ -1229,7 +1284,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             gn_modules = None
             torch.cuda.empty_cache()
-
 
     # from diffusers/examples/community/stable_diffusion_controlnet_reference.py
     def prepare_controlnet_ref_only(
@@ -1256,14 +1310,12 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         _scale_pattern = _scale_pattern * (batch_size // len(_scale_pattern) + 1)
         _scale_pattern = _scale_pattern[:batch_size]
-        _rev_pattern = [1-i for i in _scale_pattern]
+        _rev_pattern = [1 - i for i in _scale_pattern]
 
-        scale_pattern_double = torch.tensor(_scale_pattern*2).to(self.device, dtype=self.unet.dtype)
-        rev_pattern_double = torch.tensor(_rev_pattern*2).to(self.device, dtype=self.unet.dtype)
+        scale_pattern_double = torch.tensor(_scale_pattern * 2).to(self.device, dtype=self.unet.dtype)
+        rev_pattern_double = torch.tensor(_rev_pattern * 2).to(self.device, dtype=self.unet.dtype)
         scale_pattern = torch.tensor(_scale_pattern).to(self.device, dtype=self.unet.dtype)
         rev_pattern = torch.tensor(_rev_pattern).to(self.device, dtype=self.unet.dtype)
-
-
 
         def hacked_basic_transformer_inner_forward(
             self,
@@ -1320,36 +1372,46 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                                     **cross_attention_kwargs,
                                 )
 
-                            attn_output = style_fidelity * attn_output_c + (1.0 - style_fidelity) * attn_output_uc
+                            attn_output = (
+                                style_fidelity * attn_output_c + (1.0 - style_fidelity) * attn_output_uc
+                            )
 
                         else:
                             attn_output = attn_output_uc
 
                         attn_org = self.attn1(
                             norm_hidden_states,
-                            encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
+                            encoder_hidden_states=encoder_hidden_states
+                            if self.only_cross_attention
+                            else None,
                             attention_mask=attention_mask,
                             **cross_attention_kwargs,
                         )
 
-                        attn_output = scale_pattern_double[:,None,None] * attn_output + rev_pattern_double[:,None,None] * attn_org
+                        attn_output = (
+                            scale_pattern_double[:, None, None] * attn_output
+                            + rev_pattern_double[:, None, None] * attn_org
+                        )
 
                     else:
                         attn_output = self.attn1(
                             norm_hidden_states,
-                            encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
+                            encoder_hidden_states=encoder_hidden_states
+                            if self.only_cross_attention
+                            else None,
                             attention_mask=attention_mask,
                             **cross_attention_kwargs,
                         )
 
                     self.bank.clear()
 
-
             hidden_states = attn_output + hidden_states
 
             if self.attn2 is not None:
                 norm_hidden_states = (
-                    self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
+                    self.norm2(hidden_states, timestep)
+                    if self.use_ada_layer_norm
+                    else self.norm2(hidden_states)
                 )
 
                 # 2. Cross-Attention
@@ -1387,7 +1449,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             cross_attention_kwargs: Optional[Dict[str, Any]] = None,
             encoder_attention_mask: Optional[torch.FloatTensor] = None,
         ) -> torch.FloatTensor:
-
             eps = 1e-6
 
             hidden_states = self.resnets[0](hidden_states, temb)
@@ -1425,7 +1486,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         x_uc = (((x - mean) / std) * std_acc) + mean_acc
                         x_c = x_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = x.shape[2]
                             x_c = rearrange(x_c, "b c f h w -> (b f) c h w")
                             x = rearrange(x, "b c f h w -> (b f) c h w")
@@ -1437,7 +1497,10 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
                         mod_x = style_fidelity * x_c + (1.0 - style_fidelity) * x_uc
 
-                    x = scale_pattern[None,None,:,None,None] * mod_x + rev_pattern[None,None,:,None,None] * x
+                    x = (
+                        scale_pattern[None, None, :, None, None] * mod_x
+                        + rev_pattern[None, None, :, None, None] * x
+                    )
 
                     self.mean_bank = []
                     self.var_bank = []
@@ -1460,7 +1523,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             # TODO(Patrick, William) - attention mask is not used
             output_states = ()
 
-            for i, (resnet, attn, motion_module) in enumerate(zip(self.resnets, self.attentions, self.motion_modules)):
+            for i, (resnet, attn, motion_module) in enumerate(
+                zip(self.resnets, self.attentions, self.motion_modules)
+            ):
                 hidden_states = resnet(hidden_states, temb)
 
                 hidden_states = attn(
@@ -1493,7 +1558,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         hidden_states_uc = (((hidden_states - mean) / std) * std_acc) + mean_acc
                         hidden_states_c = hidden_states_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = hidden_states.shape[2]
                             hidden_states = rearrange(hidden_states, "b c f h w -> (b f) c h w")
                             hidden_states_c = rearrange(hidden_states_c, "b c f h w -> (b f) c h w")
@@ -1503,9 +1567,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
                 output_states = output_states + (hidden_states,)
 
@@ -1550,7 +1619,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         hidden_states_uc = (((hidden_states - mean) / std) * std_acc) + mean_acc
                         hidden_states_c = hidden_states_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = hidden_states.shape[2]
                             hidden_states = rearrange(hidden_states, "b c f h w -> (b f) c h w")
                             hidden_states_c = rearrange(hidden_states_c, "b c f h w -> (b f) c h w")
@@ -1560,9 +1628,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
                 output_states = output_states + (hidden_states,)
 
@@ -1591,7 +1664,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         ):
             eps = 1e-6
             # TODO(Patrick, William) - attention mask is not used
-            for i, (resnet, attn, motion_module) in enumerate(zip(self.resnets, self.attentions, self.motion_modules)):
+            for i, (resnet, attn, motion_module) in enumerate(
+                zip(self.resnets, self.attentions, self.motion_modules)
+            ):
                 # pop res hidden states
                 res_hidden_states = res_hidden_states_tuple[-1]
                 res_hidden_states_tuple = res_hidden_states_tuple[:-1]
@@ -1627,7 +1702,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                         hidden_states_uc = (((hidden_states - mean) / std) * std_acc) + mean_acc
                         hidden_states_c = hidden_states_uc.clone()
                         if do_classifier_free_guidance and style_fidelity > 0:
-
                             f = hidden_states.shape[2]
                             hidden_states = rearrange(hidden_states, "b c f h w -> (b f) c h w")
                             hidden_states_c = rearrange(hidden_states_c, "b c f h w -> (b f) c h w")
@@ -1637,10 +1711,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
-
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
             if C_REF_MODE == "read":
                 self.mean_bank = []
@@ -1652,9 +1730,16 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             return hidden_states
 
-        def hacked_UpBlock3D_forward(self, hidden_states, res_hidden_states_tuple, temb=None, upsample_size=None, encoder_hidden_states=None):
+        def hacked_UpBlock3D_forward(
+            self,
+            hidden_states,
+            res_hidden_states_tuple,
+            temb=None,
+            upsample_size=None,
+            encoder_hidden_states=None,
+        ):
             eps = 1e-6
-            for i, (resnet,motion_module) in enumerate(zip(self.resnets, self.motion_modules)):
+            for i, (resnet, motion_module) in enumerate(zip(self.resnets, self.motion_modules)):
                 # pop res hidden states
                 res_hidden_states = res_hidden_states_tuple[-1]
                 res_hidden_states_tuple = res_hidden_states_tuple[:-1]
@@ -1690,9 +1775,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             hidden_states = rearrange(hidden_states, "(b f) c h w -> b c f h w", f=f)
                             hidden_states_c = rearrange(hidden_states_c, "(b f) c h w -> b c f h w", f=f)
 
-                        mod_hidden_states = style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        mod_hidden_states = (
+                            style_fidelity * hidden_states_c + (1.0 - style_fidelity) * hidden_states_uc
+                        )
 
-                        hidden_states = scale_pattern[None,None,:,None,None] * mod_hidden_states + rev_pattern[None,None,:,None,None] * hidden_states
+                        hidden_states = (
+                            scale_pattern[None, None, :, None, None] * mod_hidden_states
+                            + rev_pattern[None, None, :, None, None] * hidden_states
+                        )
 
             if C_REF_MODE == "read":
                 self.mean_bank = []
@@ -1705,7 +1795,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             return hidden_states
 
         if reference_attn:
-            attn_modules = [module for module in torch_dfs(self.unet) if isinstance(module, BasicTransformerBlock)]
+            attn_modules = [
+                module for module in torch_dfs(self.unet) if isinstance(module, BasicTransformerBlock)
+            ]
             attn_modules = sorted(attn_modules, key=lambda x: -x.norm1.normalized_shape[0])
 
             for i, module in enumerate(attn_modules):
@@ -1752,14 +1844,15 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             gn_modules = None
             torch.cuda.empty_cache()
 
-
     def unload_controlnet_ref_only(
         self,
         reference_attn,
         reference_adain,
     ):
         if reference_attn:
-            attn_modules = [module for module in torch_dfs(self.unet) if isinstance(module, BasicTransformerBlock)]
+            attn_modules = [
+                module for module in torch_dfs(self.unet) if isinstance(module, BasicTransformerBlock)
+            ]
             attn_modules = sorted(attn_modules, key=lambda x: -x.norm1.normalized_shape[0])
 
             for i, module in enumerate(attn_modules):
@@ -1792,7 +1885,6 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             gn_modules = None
             torch.cuda.empty_cache()
 
-
     @torch.no_grad()
     def __call__(
         self,
@@ -1820,22 +1912,22 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         context_schedule: str = "uniform",
         clip_skip: int = 1,
         prompt_map: Dict[int, str] = None,
-        controlnet_type_map: Dict[str, Dict[str,float]] = None,
-        controlnet_image_map: Dict[int, Dict[str,Any]] = None,
+        controlnet_type_map: Dict[str, Dict[str, float]] = None,
+        controlnet_image_map: Dict[int, Dict[str, Any]] = None,
         controlnet_ref_map: Dict[str, Any] = None,
         controlnet_max_samples_on_vram: int = 999,
-        controlnet_max_models_on_vram: int=99,
-        controlnet_is_loop: bool=True,
+        controlnet_max_models_on_vram: int = 99,
+        controlnet_is_loop: bool = True,
         ip_adapter_map: Dict[str, Any] = None,
-        interpolation_factor = 1,
-        is_single_prompt_mode = False,
+        interpolation_factor=1,
+        is_single_prompt_mode=False,
         **kwargs,
     ):
         global C_REF_MODE
 
         controlnet_image_map_org = controlnet_image_map
 
-        controlnet_max_models_on_vram = max(controlnet_max_models_on_vram,1)
+        controlnet_max_models_on_vram = max(controlnet_max_models_on_vram, 1)
 
         # Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
@@ -1859,17 +1951,30 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         device = self._execution_device
         latents_device = torch.device("cpu") if sequential_mode else device
 
-
         if ip_adapter_map:
             if self.ip_adapter is None:
                 img_enc_path = "data/models/ip_adapter/models/image_encoder/"
                 if ip_adapter_map["is_plus_face"]:
-                    self.ip_adapter = IPAdapterPlus(self, img_enc_path, "data/models/ip_adapter/models/ip-adapter-plus-face_sd15.bin", device, 16)
+                    self.ip_adapter = IPAdapterPlus(
+                        self,
+                        img_enc_path,
+                        "data/models/ip_adapter/models/ip-adapter-plus-face_sd15.bin",
+                        device,
+                        16,
+                    )
                 elif ip_adapter_map["is_plus"]:
-                    self.ip_adapter = IPAdapterPlus(self, img_enc_path, "data/models/ip_adapter/models/ip-adapter-plus_sd15.bin", device, 16)
+                    self.ip_adapter = IPAdapterPlus(
+                        self,
+                        img_enc_path,
+                        "data/models/ip_adapter/models/ip-adapter-plus_sd15.bin",
+                        device,
+                        16,
+                    )
                 else:
-                    self.ip_adapter = IPAdapter(self, img_enc_path, "data/models/ip_adapter/models/ip-adapter_sd15.bin", device, 4)
-                self.ip_adapter.set_scale( ip_adapter_map["scale"] )
+                    self.ip_adapter = IPAdapter(
+                        self, img_enc_path, "data/models/ip_adapter/models/ip-adapter_sd15.bin", device, 4
+                    )
+                self.ip_adapter.set_scale(ip_adapter_map["scale"])
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
@@ -1910,18 +2015,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         for i, key_frame in enumerate(prompt_map):
             if do_classifier_free_guidance:
-                prompt_embeds_map[key_frame] = torch.cat([negative[i] , positive[i]])
+                prompt_embeds_map[key_frame] = torch.cat([negative[i], positive[i]])
             else:
                 prompt_embeds_map[key_frame] = positive[i]
 
-        key_first =list(prompt_map.keys())[0]
-        key_last =list(prompt_map.keys())[-1]
+        key_first = list(prompt_map.keys())[0]
+        key_last = list(prompt_map.keys())[-1]
 
-        def get_current_prompt_embeds_from_text(
-                center_frame = None,
-                video_length : int = 0
-                ):
-
+        def get_current_prompt_embeds_from_text(center_frame=None, video_length: int = 0):
             key_prev = key_last
             key_next = key_first
 
@@ -1943,7 +2044,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             rate = dist_prev / (dist_prev + dist_next)
 
-            return get_tensor_interpolation_method()( prompt_embeds_map[key_prev], prompt_embeds_map[key_next], rate )
+            return get_tensor_interpolation_method()(
+                prompt_embeds_map[key_prev], prompt_embeds_map[key_next], rate
+            )
 
         ### image
         if self.ip_adapter:
@@ -1972,18 +2075,14 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             for i, key_frame in enumerate(ip_im_map):
                 if do_classifier_free_guidance:
-                    im_prompt_embeds_map[key_frame] = torch.cat([negative[i] , positive[i]])
+                    im_prompt_embeds_map[key_frame] = torch.cat([negative[i], positive[i]])
                 else:
                     im_prompt_embeds_map[key_frame] = positive[i]
 
-            im_key_first =list(ip_im_map.keys())[0]
-            im_key_last =list(ip_im_map.keys())[-1]
+            im_key_first = list(ip_im_map.keys())[0]
+            im_key_last = list(ip_im_map.keys())[-1]
 
-        def get_current_prompt_embeds_from_image(
-                center_frame = None,
-                video_length : int = 0
-                ):
-
+        def get_current_prompt_embeds_from_image(center_frame=None, video_length: int = 0):
             key_prev = im_key_last
             key_next = im_key_first
 
@@ -2005,26 +2104,20 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
             rate = dist_prev / (dist_prev + dist_next)
 
-            return get_tensor_interpolation_method()( im_prompt_embeds_map[key_prev], im_prompt_embeds_map[key_next], rate)
+            return get_tensor_interpolation_method()(
+                im_prompt_embeds_map[key_prev], im_prompt_embeds_map[key_next], rate
+            )
 
-
-        def get_current_prompt_embeds_single(
-                context: List[int] = None,
-                video_length : int = 0
-                ):
-            center_frame = context[len(context)//2]
+        def get_current_prompt_embeds_single(context: List[int] = None, video_length: int = 0):
+            center_frame = context[len(context) // 2]
             text_emb = get_current_prompt_embeds_from_text(center_frame, video_length)
             if self.ip_adapter:
                 image_emb = get_current_prompt_embeds_from_image(center_frame, video_length)
-                return torch.cat([text_emb,image_emb], dim=1)
+                return torch.cat([text_emb, image_emb], dim=1)
             else:
                 return text_emb
 
-        def get_current_prompt_embeds_multi(
-                context: List[int] = None,
-                video_length : int = 0
-                ):
-
+        def get_current_prompt_embeds_multi(context: List[int] = None, video_length: int = 0):
             neg = []
             pos = []
             for c in context:
@@ -2039,7 +2132,7 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             if do_classifier_free_guidance:
                 neg = torch.cat(neg)
                 pos = torch.cat(pos)
-                text_emb = torch.cat([neg , pos])
+                text_emb = torch.cat([neg, pos])
             else:
                 pos = torch.cat(pos)
                 text_emb = pos
@@ -2061,87 +2154,98 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             if do_classifier_free_guidance:
                 neg = torch.cat(neg)
                 pos = torch.cat(pos)
-                image_emb = torch.cat([neg , pos])
+                image_emb = torch.cat([neg, pos])
             else:
                 pos = torch.cat(pos)
                 image_emb = pos
 
-            return torch.cat([text_emb,image_emb], dim=1)
+            return torch.cat([text_emb, image_emb], dim=1)
 
-        def get_current_prompt_embeds(
-                context: List[int] = None,
-                video_length : int = 0
-                ):
-            return get_current_prompt_embeds_single(context,video_length) if is_single_prompt_mode else get_current_prompt_embeds_multi(context,video_length)
+        def get_current_prompt_embeds(context: List[int] = None, video_length: int = 0):
+            return (
+                get_current_prompt_embeds_single(context, video_length)
+                if is_single_prompt_mode
+                else get_current_prompt_embeds_multi(context, video_length)
+            )
 
         # 3.5 Prepare controlnet variables
 
         if self.controlnet_map:
             if controlnet_max_models_on_vram < len(self.controlnet_map):
-                for _, type_str in zip( range(controlnet_max_models_on_vram-1) ,self.controlnet_map):
+                for _, type_str in zip(range(controlnet_max_models_on_vram - 1), self.controlnet_map):
                     self.controlnet_map[type_str].to(device=device)
             else:
                 for type_str in self.controlnet_map:
                     self.controlnet_map[type_str].to(device=device)
 
-
         # controlnet_image_map
         # { 0 : { "type_str" : IMAGE, "type_str2" : IMAGE }  }
         # { "type_str" : { 0 : IMAGE, 15 : IMAGE }  }
-        controlnet_image_map= None
+        controlnet_image_map = None
 
         if controlnet_image_map_org:
-            controlnet_image_map= {key: {} for key in controlnet_type_map}
+            controlnet_image_map = {key: {} for key in controlnet_type_map}
             for key_frame_no in controlnet_image_map_org:
                 for t, img in controlnet_image_map_org[key_frame_no].items():
                     controlnet_image_map[t][key_frame_no] = self.prepare_image(
-                                                        image=img,
-                                                        width=width,
-                                                        height=height,
-                                                        batch_size=1 * 1,
-                                                        num_images_per_prompt=1,
-                                                        device=device,
-                                                        dtype=self.controlnet_map[t].dtype,
-                                                        do_classifier_free_guidance=do_classifier_free_guidance,
-                                                        guess_mode=False,
-                                                    )
+                        image=img,
+                        width=width,
+                        height=height,
+                        batch_size=1 * 1,
+                        num_images_per_prompt=1,
+                        device=device,
+                        dtype=self.controlnet_map[t].dtype,
+                        do_classifier_free_guidance=do_classifier_free_guidance,
+                        guess_mode=False,
+                    )
 
         # { "0_type_str" : { "scales" = [0.1, 0.3, 0.5, 1.0, 0.5, 0.3, 0.1], "frames"=[125, 126, 127, 0, 1, 2, 3] }}
         controlnet_scale_map = {}
-        controlnet_affected_list = np.zeros(video_length,dtype = int)
+        controlnet_affected_list = np.zeros(video_length, dtype=int)
 
         if controlnet_image_map:
             for type_str in controlnet_image_map:
                 for key_frame_no in controlnet_image_map[type_str]:
                     scale_list = controlnet_type_map[type_str]["control_scale_list"]
-                    scale_list = scale_list[0: context_frames]
+                    scale_list = scale_list[0:context_frames]
                     scale_len = len(scale_list)
 
                     if controlnet_is_loop:
-                        frames = [ i%video_length for i in range(key_frame_no-scale_len, key_frame_no+scale_len+1)]
+                        frames = [
+                            i % video_length
+                            for i in range(key_frame_no - scale_len, key_frame_no + scale_len + 1)
+                        ]
 
                         controlnet_scale_map[str(key_frame_no) + "_" + type_str] = {
-                            "scales" : scale_list[::-1] + [1.0] + scale_list,
-                            "frames" : frames,
+                            "scales": scale_list[::-1] + [1.0] + scale_list,
+                            "frames": frames,
                         }
                     else:
-                        frames = [ i for i in range(max(0, key_frame_no-scale_len), min(key_frame_no+scale_len+1, video_length))]
+                        frames = [
+                            i
+                            for i in range(
+                                max(0, key_frame_no - scale_len),
+                                min(key_frame_no + scale_len + 1, video_length),
+                            )
+                        ]
 
                         controlnet_scale_map[str(key_frame_no) + "_" + type_str] = {
-                            "scales" : scale_list[:key_frame_no][::-1] + [1.0] + scale_list[:video_length-key_frame_no-1],
-                            "frames" : frames,
+                            "scales": scale_list[:key_frame_no][::-1]
+                            + [1.0]
+                            + scale_list[: video_length - key_frame_no - 1],
+                            "frames": frames,
                         }
 
                     controlnet_affected_list[frames] = 1
 
-        def controlnet_is_affected( frame_index:int):
+        def controlnet_is_affected(frame_index: int):
             return controlnet_affected_list[frame_index]
 
         def get_controlnet_scale(
-                type: str,
-                cur_step: int,
-                step_length: int,
-                ):
+            type: str,
+            cur_step: int,
+            step_length: int,
+        ):
             s = controlnet_type_map[type]["control_guidance_start"]
             e = controlnet_type_map[type]["control_guidance_end"]
             keep = 1.0 - float(cur_step / len(timesteps) < s or (cur_step + 1) / step_length > e)
@@ -2151,11 +2255,11 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             return keep * scale
 
         def get_controlnet_variable(
-                type_str: str,
-                cur_step: int,
-                step_length: int,
-                target_frames: List[int],
-                ):
+            type_str: str,
+            cur_step: int,
+            step_length: int,
+            target_frames: List[int],
+        ):
             cont_vars = []
 
             if not controlnet_image_map:
@@ -2165,14 +2269,16 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 return None
 
             for fr, img in controlnet_image_map[type_str].items():
-
                 if fr in target_frames:
-                    cont_vars.append( {
-                        "frame_no" : fr,
-                        "image" : img,
-                        "cond_scale" : get_controlnet_scale(type_str, cur_step, step_length),
-                        "guess_mode" : controlnet_type_map[type_str]["guess_mode"]
-                    } )
+                    cont_vars.append(
+                        {
+                            "frame_no": fr,
+                            "image": img,
+                            "cond_scale": get_controlnet_scale(type_str, cur_step, step_length) * (fr / len(controlnet_image_map[type_str].items()))
+                            * (fr / len(controlnet_image_map[type_str].items())),
+                            "guess_mode": controlnet_type_map[type_str]["guess_mode"],
+                        }
+                    )
 
             return cont_vars
 
@@ -2223,7 +2329,7 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             ref_image_latents = rearrange(ref_image_latents, "(b f) c h w -> b c f h w", f=context_frames)
 
             # 5.99. Modify self attention and group norm
-#            self.prepare_controlnet_ref_only(
+            #            self.prepare_controlnet_ref_only(
             self.prepare_controlnet_ref_only_without_motion(
                 ref_image_latents=ref_image_latents,
                 batch_size=context_frames,
@@ -2268,10 +2374,10 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 )
 
                 # { "0_type_str" : (down_samples, mid_sample)  }
-                controlnet_result={}
+                controlnet_result = {}
 
                 def get_controlnet_result(context: List[int] = None):
-                    #logger.info(f"get_controlnet_result called {context=}")
+                    # logger.info(f"get_controlnet_result called {context=}")
 
                     if controlnet_image_map is None:
                         return None, None
@@ -2279,36 +2385,42 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                     hit = False
                     for n in context:
                         if controlnet_is_affected(n):
-                            hit=True
+                            hit = True
                             break
                     if hit == False:
                         return None, None
 
-                    _down_block_res_samples=[]
+                    _down_block_res_samples = []
 
                     first_down = list(list(controlnet_result.values())[0].values())[0][0]
                     first_mid = list(list(controlnet_result.values())[0].values())[0][1]
                     for ii in range(len(first_down)):
                         _down_block_res_samples.append(
                             torch.zeros(
-                                (first_down[ii].shape[0], first_down[ii].shape[1], len(context) ,*first_down[ii].shape[3:]),
+                                (
+                                    first_down[ii].shape[0],
+                                    first_down[ii].shape[1],
+                                    len(context),
+                                    *first_down[ii].shape[3:],
+                                ),
                                 device=device,
                                 dtype=first_down[ii].dtype,
-                                ))
-                    _mid_block_res_samples =  torch.zeros(
-                                    (first_mid.shape[0], first_mid.shape[1], len(context) ,*first_mid.shape[3:]),
-                                    device=device,
-                                    dtype=first_mid.dtype,
-                                    )
+                            )
+                        )
+                    _mid_block_res_samples = torch.zeros(
+                        (first_mid.shape[0], first_mid.shape[1], len(context), *first_mid.shape[3:]),
+                        device=device,
+                        dtype=first_mid.dtype,
+                    )
 
                     for fr in controlnet_result:
                         for type_str in controlnet_result[fr]:
                             result = str(fr) + "_" + type_str
 
                             val = controlnet_result[fr][type_str]
-                            cur_down = [ v.to(device = device, dtype=first_down[0].dtype) for v in val[0] ]
-                            cur_mid =val[1].to(device = device, dtype=first_mid.dtype)
-                            loc =  list(set(context) & set(controlnet_scale_map[result]["frames"]))
+                            cur_down = [v.to(device=device, dtype=first_down[0].dtype) for v in val[0]]
+                            cur_mid = val[1].to(device=device, dtype=first_mid.dtype)
+                            loc = list(set(context) & set(controlnet_scale_map[result]["frames"]))
                             scales = []
 
                             for o in loc:
@@ -2316,57 +2428,62 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                                     if o == f:
                                         scales.append(controlnet_scale_map[result]["scales"][j])
                                         break
-                            loc_index=[]
+                            loc_index = []
 
                             for o in loc:
-                                for j, f in enumerate( context ):
-                                    if o==f:
+                                for j, f in enumerate(context):
+                                    if o == f:
                                         loc_index.append(j)
                                         break
 
                             mod = torch.tensor(scales).to(device, dtype=cur_mid.dtype)
 
-                            add = cur_mid * mod[None,None,:,None,None]
-                            _mid_block_res_samples[:, :, loc_index, :, :] = _mid_block_res_samples[:, :, loc_index, :, :] + add
+                            add = cur_mid * mod[None, None, :, None, None]
+                            _mid_block_res_samples[:, :, loc_index, :, :] = (
+                                _mid_block_res_samples[:, :, loc_index, :, :] + add
+                            )
 
                             for ii in range(len(cur_down)):
-                                add = cur_down[ii] * mod[None,None,:,None,None]
-                                _down_block_res_samples[ii][:, :, loc_index, :, :] = _down_block_res_samples[ii][:, :, loc_index, :, :] + add
+                                add = cur_down[ii] * mod[None, None, :, None, None]
+                                _down_block_res_samples[ii][:, :, loc_index, :, :] = (
+                                    _down_block_res_samples[ii][:, :, loc_index, :, :] + add
+                                )
 
                     return _down_block_res_samples, _mid_block_res_samples
 
-                def process_controlnet( target_frames: List[int] = None ):
-                    #logger.info(f"process_controlnet called {target_frames=}")
+                def process_controlnet(target_frames: List[int] = None):
+                    # logger.info(f"process_controlnet called {target_frames=}")
                     nonlocal controlnet_result
 
                     controlnet_samples_on_vram = 0
 
-                    loc =  list(set(target_frames) & set(controlnet_result.keys()))
+                    loc = list(set(target_frames) & set(controlnet_result.keys()))
 
                     controlnet_result = {key: controlnet_result[key] for key in loc}
 
                     target_frames = list(set(target_frames) - set(loc))
 
-                    def sample_to_device( sample ):
+                    def sample_to_device(sample):
                         nonlocal controlnet_samples_on_vram
 
                         if controlnet_max_samples_on_vram <= controlnet_samples_on_vram:
-                            down_samples = [ v.to(device = torch.device("cpu")) for v in sample[0] ]
-                            mid_sample = sample[1].to(device = torch.device("cpu"))
+                            down_samples = [v.to(device=torch.device("cpu")) for v in sample[0]]
+                            mid_sample = sample[1].to(device=torch.device("cpu"))
                         else:
                             if sample[0][0].device != device:
-                                down_samples = [ v.to(device = device) for v in sample[0] ]
-                                mid_sample = sample[1].to(device = device)
+                                down_samples = [v.to(device=device) for v in sample[0]]
+                                mid_sample = sample[1].to(device=device)
                             else:
                                 down_samples = sample[0]
                                 mid_sample = sample[1]
                             controlnet_samples_on_vram += 1
                         return down_samples, mid_sample
 
-
                     for fr in controlnet_result:
                         for type_str in controlnet_result[fr]:
-                            controlnet_result[fr][type_str] = sample_to_device(controlnet_result[fr][type_str])
+                            controlnet_result[fr][type_str] = sample_to_device(
+                                controlnet_result[fr][type_str]
+                            )
 
                     for type_str in controlnet_type_map:
                         cont_vars = get_controlnet_variable(type_str, i, len(timesteps), target_frames)
@@ -2385,7 +2502,9 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                                 .to(device)
                                 .repeat(2 if do_classifier_free_guidance else 1, 1, 1, 1, 1)
                             )
-                            control_model_input = self.scheduler.scale_model_input(latent_model_input, t)[:, :, 0]
+                            control_model_input = self.scheduler.scale_model_input(latent_model_input, t)[
+                                :, :, 0
+                            ]
                             controlnet_prompt_embeds = get_current_prompt_embeds([frame_no], latents.shape[2])
 
                             down_samples, mid_sample = self.controlnet_map[type_str](
@@ -2399,26 +2518,36 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                             )
 
                             for ii in range(len(down_samples)):
-                                down_samples[ii] = rearrange(down_samples[ii], "(b f) c h w -> b c f h w", f=1)
+                                down_samples[ii] = rearrange(
+                                    down_samples[ii], "(b f) c h w -> b c f h w", f=1
+                                )
                             mid_sample = rearrange(mid_sample, "(b f) c h w -> b c f h w", f=1)
 
                             if frame_no not in controlnet_result:
                                 controlnet_result[frame_no] = {}
 
-                            controlnet_result[frame_no][type_str] = sample_to_device((down_samples, mid_sample))
+                            controlnet_result[frame_no][type_str] = sample_to_device(
+                                (down_samples, mid_sample)
+                            )
 
                         if org_device != device:
-                            self.controlnet_map[type_str] = self.controlnet_map[type_str].to(device=org_device)
+                            self.controlnet_map[type_str] = self.controlnet_map[type_str].to(
+                                device=org_device
+                            )
 
-                #logger.info(f"STEP start")
+                # logger.info(f"STEP start")
                 stopwatch_record("STEP start")
 
                 for context in context_scheduler(
                     i, num_inference_steps, latents.shape[2], context_frames, context_stride, context_overlap
                 ):
                     if controlnet_image_map:
-                        controlnet_target = list(range(context[0]-context_frames, context[0])) + context + list(range(context[-1]+1, context[-1]+1+context_frames))
-                        controlnet_target = [f%video_length for f in controlnet_target]
+                        controlnet_target = (
+                            list(range(context[0] - context_frames, context[0]))
+                            + context
+                            + list(range(context[-1] + 1, context[-1] + 1 + context_frames))
+                        )
+                        controlnet_target = [f % video_length for f in controlnet_target]
                         controlnet_target = list(set(controlnet_target))
 
                         process_controlnet(controlnet_target)
@@ -2433,12 +2562,15 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
                     cur_prompt = get_current_prompt_embeds(context, latents.shape[2])
 
-                    down_block_res_samples,mid_block_res_sample = get_controlnet_result(context)
+                    down_block_res_samples, mid_block_res_sample = get_controlnet_result(context)
 
                     if c_ref_enable:
                         # ref only part
                         noise = randn_tensor(
-                            ref_image_latents.shape, generator=generator, device=device, dtype=ref_image_latents.dtype
+                            ref_image_latents.shape,
+                            generator=generator,
+                            device=device,
+                            dtype=ref_image_latents.dtype,
                         )
 
                         ref_xt = self.scheduler.add_noise(
@@ -2521,7 +2653,7 @@ class AnimationPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             torch.cuda.empty_cache()
             show_gpu("after unload ip_adapter")
 
-        latents = self.interpolate_latents(latents,interpolation_factor, device)
+        latents = self.interpolate_latents(latents, interpolation_factor, device)
 
         # Return latents if requested (this will never be a dict)
         if not output_type == "latent":

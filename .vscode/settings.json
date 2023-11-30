@@ -1,4 +1,7 @@
 {
+
+    "workbench.colorTheme": "Solarized Dark",
+
     "editor.insertSpaces": true,
     "editor.tabSize": 4,
     "files.trimTrailingWhitespace": true,
