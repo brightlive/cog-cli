@@ -223,7 +223,8 @@ class Predictor(BasePredictor):
         #print(prompt_travel_json)
         #print(f"{'-'*80}")
 
-        file_path = "config/prompts/custom_prompt_travel.json"
+        #file_path = "config/prompts/custom_prompt_travel.json"
+        file_path = "input/prompt.json"
 
         img2video = True # Temp
         if img2video:
@@ -248,11 +249,13 @@ class Predictor(BasePredictor):
                 data = json.load(file)
                 data['path'] = 'share/Stable-diffusion/' + path
                 data['prompt_map']['0'] = prompt
+                data['guidance_scale'] = guidance_scale
+                data['seed'] = seed
+                data['steps'] = steps
                 data['controlnet_map']['controlnet_tile']['controlnet_conditioning_scale'] = 0.1
                 data['controlnet_map']['controlnet_ip2p']['controlnet_conditioning_scale'] = 0.5
-                with open('input/prompt.json', 'w', encoding='utf-8') as file:
+                with open(file_path, 'w', encoding='utf-8') as file:
                     json.dump(data, file, indent=4)  # indent=4 for pretty printing
-                    file_path = "input/prompt.json"
 
         else:
             prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
