@@ -1,6 +1,22 @@
 {
   "name": "sample",
   "path": "share/Stable-diffusion/toonyou_beta3.safetensors",
+  "lcm_map":{
+    "enable":false,
+    "start_scale":0.15,
+    "end_scale":0.75,
+    "gradient_start":0.2,
+    "gradient_end":0.75
+  },
+  "gradual_latent_hires_fix_map":{
+    "enable": false,
+    "scale": {
+      "0": 0.5,
+      "0.7": 1.0
+    },
+    "reverse_steps": 5,
+    "noise_add_count":3
+  },
   "motion_module": "models/motion-module/mm_sd_v15_v2.ckpt",
   "compile": false,
   "seed": [
@@ -9,6 +25,7 @@
   "scheduler": "k_dpmpp_sde",
   "steps": 20,
   "guidance_scale": 10,
+  "unet_batch_size": 1,
   "clip_skip": 2,
   "prompt_fixed_ratio": 0.5,
   "head_prompt": "masterpiece, best quality, a beautiful and detailed portriat of muffet, monster girl,((purple body:1.3)),humanoid, arachnid, anthro,((fangs)),pigtails,hair bows,5 eyes,spider girl,6 arms,solo",
@@ -32,16 +49,19 @@
   "ip_adapter_map": {
       "enable": true,
       "input_image_dir": "ip_adapter_image/test",
+      "prompt_fixed_ratio": 0.5,
       "save_input_image": true,
       "resized_to_square": false,
       "scale": 0.5,
-      "is_plus_face": true,
-      "is_plus": true
+      "is_full_face": false,
+      "is_plus_face": false,
+      "is_plus": true,
+      "is_light": false
   },
   "controlnet_map": {
     "input_image_dir" : "controlnet_image/test",
-    "max_samples_on_vram": 200,
-    "max_models_on_vram" : 3,
+    "max_samples_on_vram": 0,
+    "max_models_on_vram" : 0,
     "save_detectmap": true,
     "preprocess_on_gpu": true,
     "is_loop": true,
@@ -182,15 +202,51 @@
       "control_guidance_end": 1.0,
       "control_scale_list":[0.5,0.4,0.3,0.2,0.1]
     },
+    "qr_code_monster_v1": {
+      "enable": true,
+      "use_preprocessor":true,
+      "guess_mode":false,
+      "controlnet_conditioning_scale": 1.0,
+      "control_guidance_start": 0.0,
+      "control_guidance_end": 1.0,
+      "control_scale_list":[0.5,0.4,0.3,0.2,0.1]
+    },
+    "qr_code_monster_v2": {
+      "enable": true,
+      "use_preprocessor":true,
+      "guess_mode":false,
+      "controlnet_conditioning_scale": 1.0,
+      "control_guidance_start": 0.0,
+      "control_guidance_end": 1.0,
+      "control_scale_list":[0.5,0.4,0.3,0.2,0.1]
+    },
+    "controlnet_mediapipe_face": {
+      "enable": true,
+      "use_preprocessor":true,
+      "guess_mode":false,
+      "controlnet_conditioning_scale": 1.0,
+      "control_guidance_start": 0.0,
+      "control_guidance_end": 1.0,
+      "control_scale_list":[0.5,0.4,0.3,0.2,0.1]
+    },
+    "animatediff_controlnet": {
+      "enable": true,
+      "use_preprocessor":true,
+      "guess_mode":false,
+      "controlnet_conditioning_scale": 1.0,
+      "control_guidance_start": 0.0,
+      "control_guidance_end": 1.0,
+      "control_scale_list":[0.5,0.4,0.3,0.2,0.1]
+    },
     "controlnet_ref": {
-        "enable": false,
-        "ref_image": "ref_image/ref_sample.png",
-        "attention_auto_machine_weight": 0.3,
-        "gn_auto_machine_weight": 0.3,
-        "style_fidelity": 0.5,
-        "reference_attn": true,
-        "reference_adain": false,
-        "scale_pattern":[1.0]
+      "enable": false,
+      "ref_image": "ref_image/ref_sample.png",
+      "attention_auto_machine_weight": 0.3,
+      "gn_auto_machine_weight": 0.3,
+      "style_fidelity": 0.5,
+      "reference_attn": true,
+      "reference_adain": false,
+      "scale_pattern":[1.0]
     }
   },
   "upscale_config": {

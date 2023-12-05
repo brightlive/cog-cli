@@ -9,94 +9,40 @@ I added a experimental feature to animatediff-cli to change the prompt in the mi
 It seems to work surprisingly well!
 
 ### Example
-- [A command to stylization with mask has been added](https://github.com/s9roll7/animatediff-cli-prompt-travel#video-stylization-with-mask).
 
-<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/e2ce68b0-f904-4fc3-8d5c-2224b5ffc1d3" muted="false"></video></div>
-<br>
-
-- [A command to automate video stylization has been added](https://github.com/s9roll7/animatediff-cli-prompt-travel#video-stylization).
-- Original / First generation result / Second generation(for upscaling) result
-- It took 4 minutes to generate the first one and about 5 minutes to generate the second one (on rtx 4090).
-- more example [here](https://github.com/s9roll7/animatediff-cli-prompt-travel/issues/29)
-
-<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/2f1965f2-9a50-485e-ac95-e888a3189ba2" muted="false"></video></div>
-<br>
-
-- Numbered from left to right.
-- 1.prompt + lora
-- 2.prompt + lora + IP-Adapter(scale 0.5)
-- 3.prompt + lora + IP-Adapter Plus(scale 0.5)
-- 4.prompt + lora + Controlnet Reference Only(style_fidelity 0)
-- input image
-
-![0000](https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/4ae90f13-341d-4965-adfc-174ec2e61cd7)
-
-
-<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/d9d300a9-1107-4a3b-a1f1-3245b49dde10" muted="false"></video></div>
+- added new controlnet [animatediff-controlnet](https://www.reddit.com/r/StableDiffusion/comments/183gt1g/animation_with_animatediff_and_retrained/)
+- It works like ip2p and is very useful for replacing characters
+- (This sample is generated at high resolution using the gradual latent hires fix)
+- more example [here](https://github.com/s9roll7/animatediff-cli-prompt-travel/issues/189)
+<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/a867c480-3f1a-4e2c-874f-88c1a54e8903" muted="false"></video></div>
 <br>
 
 
-- controlnet_openpose + controlnet_softedge
-- input frames for controlnet(0,16,32 frames)
-<img src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/4adac698-75a4-4c6d-bf64-a5723d0e3e77" width="512">
-
-- result
-<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/50aa9d0d-15b6-4c84-a497-8d020d3bdb7c" muted="false"></video></div>
+- gradual latent hires fix
+- sd15 512x856 / sd15 768x1280 / sd15 768x1280 with gradual latent hires fix
+- more example [here](https://github.com/s9roll7/animatediff-cli-prompt-travel/issues/188)
+<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/346c0541-7f05-4c45-ab2a-911bc0942fa8" muted="false"></video></div>
 <br>
 
-- In the latest version, generation can now be controlled more precisely through prompts.
-- sample 1
-```json
-    "prompt_fixed_ratio": 0.8,
-    "head_prompt": "1girl, wizard, circlet, earrings, jewelry, purple hair,",
-    "prompt_map": {
-        "0": "(standing,full_body),blue_sky, town",
-        "8": "(sitting,full_body),rain, town",
-        "16": "(standing,full_body),blue_sky, woods",
-        "24": "(upper_body), beach",
-        "32": "(upper_body, smile)",
-        "40": "(upper_body, angry)",
-        "48": "(upper_body, smile, from_above)",
-        "56": "(upper_body, angry, from_side)",
-        "64": "(upper_body, smile, from_below)",
-        "72": "(upper_body, angry, from_behind, looking at viewer)",
-        "80": "face,looking at viewer",
-        "88": "face,looking at viewer, closed_eyes",
-        "96": "face,looking at viewer, open eyes, open_mouth",
-        "104": "face,looking at viewer, closed_eyes, closed_mouth",
-        "112": "face,looking at viewer, open eyes,eyes, open_mouth, tongue, smile, laughing",
-        "120": "face,looking at viewer, eating, bowl,chopsticks,holding,food"
-    },
-```
-<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/c4de4b87-f302-4d61-98c7-9607dece386f" muted="false"></video></div>
+
+- [sdxl turbo lora](https://civitai.com/models/215485?modelVersionId=242807)
+- more example [here](https://github.com/s9roll7/animatediff-cli-prompt-travel/issues/184)
+
+<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/15c39ac2-3853-44f5-b08c-142c90985c4b" muted="false"></video></div>
 <br>
 
-- sample 2
-```json
-    "prompt_fixed_ratio": 1.0,
-    "head_prompt": "1girl, wizard, circlet, earrings, jewelry, purple hair,",
-    "prompt_map": {
-        "0": "",
-        "8": "((fire magic spell, fire background))",
-        "16": "((ice magic spell, ice background))",
-        "24": "((thunder magic spell, thunder background))",
-        "32": "((skull magic spell, skull background))",
-        "40": "((wind magic spell, wind background))",
-        "48": "((stone magic spell, stone background))",
-        "56": "((holy magic spell, holy background))",
-        "64": "((star magic spell, star background))",
-        "72": "((plant magic spell, plant background))",
-        "80": "((meteor magic spell, meteor background))"
-    },
-```
-<div><video controls src="https://github.com/s9roll7/animatediff-cli-prompt-travel/assets/118420657/31a5827d-e551-4937-8b67-51747a92d14c" muted="false"></video></div>
 <br>
+
+[Click here to see old samples.](example.md)
+
+<br>
+<br>
+
 
 ### Installation(for windows)
 Same as the original animatediff-cli  
 [Python 3.10](https://www.python.org/) and git client must be installed  
-(A few days ago, PyTorch 2.1 was released, but it is safer to install the older version until things settle down.   
-[#87](https://github.com/s9roll7/animatediff-cli-prompt-travel/issues/87))
+
 ```sh
 git clone https://github.com/s9roll7/animatediff-cli-prompt-travel.git
 cd animatediff-cli-prompt-travel
@@ -104,10 +50,9 @@ py -3.10 -m venv venv
 venv\Scripts\activate.bat
 set PYTHONUTF8=1
 python -m pip install --upgrade pip
-# Torch installation must be modified to suit the environment. (https://pytorch.org/get-started/previous-versions/)
-python -m pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+# Torch installation must be modified to suit the environment. (https://pytorch.org/get-started/locally/)
+python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 python -m pip install -e .
-python -m pip install xformers
 
 # If you want to use the 'stylize' command, you will also need
 python -m pip install -e .[stylize]
@@ -128,10 +73,30 @@ I found a detailed tutorial
 ### How To Use
 Almost same as the original animatediff-cli, but with a slight change in config format.
 ```json
-# prompt_travel.json
+
 {
   "name": "sample",
   "path": "share/Stable-diffusion/mistoonAnime_v20.safetensors",  # Specify Checkpoint as a path relative to /animatediff-cli/data
+  "lcm_map":{     # lcm-lora
+    "enable":false,
+    "start_scale":0.15,
+    "end_scale":0.75,
+    "gradient_start":0.2,
+    "gradient_end":0.75
+  },
+  "gradual_latent_hires_fix_map":{ # gradual latent hires fix
+    # This is an option to address the problem of chaos being generated when the model is generated beyond its proper size.
+    # It also has the effect of increasing generation speed.
+    "enable": false,    # enable/disable
+    "scale": {    # "DENOISE PROGRESS" : LATENT SCALE format
+      # In this example, Up to 70% of the total denoise, latent is halved to the specified size.
+      # From 70% to the end, calculate the size as specified.
+      "0": 0.5,
+      "0.7": 1.0
+    },
+    "reverse_steps": 5,          # Number of reversal steps at latent size switching timing
+    "noise_add_count":3          # Additive amount of noise　at latent size switching timing
+  },
   "vae_path":"share/VAE/vae-ft-mse-840000-ema-pruned.ckpt",       # Specify vae as a path relative to /animatediff-cli/data
   "motion_module": "models/motion-module/mm_sd_v14.ckpt",         # Specify motion module as a path relative to /animatediff-cli/data
   "compile": false,
@@ -142,6 +107,7 @@ Almost same as the original animatediff-cli, but with a slight change in config 
   "steps": 40,
   "guidance_scale": 20,     # cfg scale
   "clip_skip": 2,
+  "prompt_fixed_ratio": 0.5,
   "head_prompt": "masterpiece, best quality, a beautiful and detailed portriat of muffet, monster girl,((purple body:1.3)),humanoid, arachnid, anthro,((fangs)),pigtails,hair bows,5 eyes,spider girl,6 arms,solo",
   "prompt_map": {           # "FRAME" : "PROMPT" format / ex. prompt for frame 32 is "head_prompt" + prompt_map["32"] + "tail_prompt"
     "0":  "smile standing,((spider webs:1.0))",
@@ -166,13 +132,65 @@ Almost same as the original animatediff-cli, but with a slight change in config 
       "enable": true,
       # Specify input image directory relative to /animatediff-cli/data (important! No need to specify frames in the config file. The effect on generation is exactly the same logic as the placement of the prompt)
       "input_image_dir": "ip_adapter_image/test",
+      "prompt_fixed_ratio": 0.5,
       # save input image or not
       "save_input_image": true,
       # Ratio of image prompt vs text prompt (important). Even if you want to emphasize only the image prompt in 1.0, do not leave prompt/neg prompt empty, but specify a general text such as "best quality".
       "scale": 0.5,
-      # IP-Adapter or IP-Adapter Plus or IP-Adapter Plus Face (important) It would be a completely different outcome. Not always PLUS a superior result.
-      "is_plus_face": true,
-      "is_plus": true
+      # IP-Adapter/IP-Adapter Full Face/IP-Adapter Plus Face/IP-Adapter Plus/IP-Adapter Light (important) It would be a completely different outcome. Not always PLUS a superior result.
+      "is_full_face": false,
+      "is_plus_face": false,
+      "is_plus": true,
+      "is_light": false
+  },
+  "img2img_map": {
+      # enable/disable
+      "enable": true,
+      # Directory where the initial image is placed
+      "init_img_dir": "..\\stylize\\2023-10-27T19-43-01-sample-mistoonanime_v20\\00_img2img",
+      "save_init_image": true,
+      # The smaller the value, the closer the result will be to the initial image.
+      "denoising_strength": 0.7
+  },
+  "region_map": {
+      # setting for region 0. You can also add regions if necessary.
+      # The region added at the back will be drawn at the front.
+      "0": {
+          # enable/disable
+          "enable": true,
+          # If you want to draw a separate object for each region, enter a value of 0.1 or higher.
+          "crop_generation_rate": 0.1,
+          # Directory where mask images are placed
+          "mask_dir": "..\\stylize\\2023-10-27T19-43-01-sample-mistoonanime_v20\\r_fg_00_2023-10-27T19-44-08\\00_mask",
+          "save_mask": true,
+          # If true, the initial image will be drawn as is (inpaint)
+          "is_init_img": false,
+          # conditions for region 0
+          "condition": {
+              # text prompt for region 0
+              "prompt_fixed_ratio": 0.5,
+              "head_prompt": "",
+              "prompt_map": {
+                  "0": "(masterpiece, best quality:1.2), solo, 1girl, kusanagi motoko, looking at viewer, jacket, leotard, thighhighs, gloves, cleavage"
+               },
+              "tail_prompt": "",
+              # image prompt(ip adapter) for region 0
+              # It is not possible to change lora for each region, but you can do something similar using an ip adapter.
+              "ip_adapter_map": {
+                  "enable": true,
+                  "input_image_dir": "..\\stylize\\2023-10-27T19-43-01-sample-mistoonanime_v20\\r_fg_00_2023-10-27T19-44-08\\00_ipadapter",
+                  "prompt_fixed_ratio": 0.5,
+                  "save_input_image": true,
+                  "resized_to_square": false
+              }
+          }
+      },
+      # setting for background
+      "background": {
+          # If true, the initial image will be drawn as is (inpaint)
+          "is_init_img": true,
+          "hint": "background's condition refers to the one in root"
+      }
   },
   "controlnet_map": {       # config for controlnet(for generation)
     "input_image_dir" : "controlnet_image/test",    # Specify input image directory relative to /animatediff-cli/data (important! Please refer to the directory structure of sample. No need to specify frames in the config file.)
@@ -337,6 +355,12 @@ python -m pip install -e .[stylize]
 # create config file from src video
 animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4
 
+# create config file from src video (img2img)
+animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4 -i2i
+
+# If you have less than 12GB of vram, specify low vram mode
+animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4 -lo
+
 # Edit the config file by referring to the hint displayed in the log when the command finishes
 # It is recommended to specify a short length for the test run
 
@@ -353,6 +377,78 @@ animatediff stylize generate STYLYZE_DIR -L 16 -FO 200
 animatediff stylize generate STYLYZE_DIR
 ```
 
+#### Video Stylization with region
+```sh
+cd animatediff-cli-prompt-travel
+venv\Scripts\activate.bat
+
+# If you want to use the 'stylize create-region' command, additional installation required
+python -m pip install -e .[stylize_mask]
+
+# [1] create config file from src video
+animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4
+# for img2img
+animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4 -i2i
+
+# If you have less than 12GB of vram, specify low vram mode
+animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4 -lo
+```
+```json
+# in prompt.json (generated in [1])
+# [2] write the object you want to mask
+# ex.) If you want to mask a person
+    "stylize_config": {
+        "create_mask": [
+            "person"
+        ],
+        "composite": {
+```
+```sh
+# [3] generate region
+animatediff stylize create-region STYLYZE_DIR
+
+# If you have less than 12GB of vram, specify low vram mode
+animatediff stylize create-region STYLYZE_DIR -lo
+
+("animatediff stylize create-region -h" for help)
+```
+```json
+# in prompt.json (generated in [1])
+[4] edit region_map,prompt,controlnet setting. Put the image you want to reference in the ip adapter directory (both background and region)
+  "region_map": {
+      "0": {
+          "enable": true,
+          "mask_dir": "..\\stylize\\2023-10-27T19-43-01-sample-mistoonanime_v20\\r_fg_00_2023-10-27T19-44-08\\00_mask",
+          "save_mask": true,
+          "is_init_img": false, # <----------
+          "condition": {
+              "prompt_fixed_ratio": 0.5,
+              "head_prompt": "",  # <----------
+              "prompt_map": {  # <----------
+                  "0": "(masterpiece, best quality:1.2), solo, 1girl, kusanagi motoko, looking at viewer, jacket, leotard, thighhighs, gloves, cleavage"
+               },
+              "tail_prompt": "",  # <----------
+              "ip_adapter_map": {
+                  "enable": true,
+                  "input_image_dir": "..\\stylize\\2023-10-27T19-43-01-sample-mistoonanime_v20\\r_fg_00_2023-10-27T19-44-08\\00_ipadapter",
+                  "prompt_fixed_ratio": 0.5,
+                  "save_input_image": true,
+                  "resized_to_square": false
+              }
+          }
+      },
+      "background": {
+          "is_init_img": false,  # <----------
+          "hint": "background's condition refers to the one in root"
+      }
+  },
+```
+```sh
+# [5] generate
+animatediff stylize generate STYLYZE_DIR
+```
+
+
 #### Video Stylization with mask
 ```sh
 cd animatediff-cli-prompt-travel
@@ -363,6 +459,9 @@ python -m pip install -e .[stylize_mask]
 
 # [1] create config file from src video
 animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4
+
+# If you have less than 12GB of vram, specify low vram mode
+animatediff stylize create-config YOUR_SRC_MOVIE_FILE.mp4 -lo
 ```
 ```json
 # in prompt.json (generated in [1])
@@ -402,6 +501,8 @@ animatediff stylize create-mask STYLYZE_DIR -lo
 # The background is output to the following directory (BG_STYLYZE_DIR)
 # STYLYZE_DIR/bg_timestamp_str
 
+("animatediff stylize create-mask -h" for help)
+
 # [4] generate foreground
 animatediff stylize generate FG_STYLYZE_DIR
 
@@ -440,7 +541,13 @@ animatediff stylize generate FG_STYLYZE_DIR
 # [6] composite
 animatediff stylize composite STYLYZE_DIR
 
-# See help for detailed options.
+# By default, "sam hq" and "groundingdino" are used for cropping, but it is not always possible to crop the image well.
+# In that case, you can try "rembg" or "anime-segmentation".
+# However, when using "rembg" and "anime-segmentation", you cannot specify the target text to be clipped.
+animatediff stylize composite STYLYZE_DIR -rem
+animatediff stylize composite STYLYZE_DIR -anim
+
+# See help for detailed options. (animatediff stylize composite -h)
 ```
 
 
@@ -461,12 +568,14 @@ ex.  \_\_animal\_\_ for animal.txt. \_\_background-color\_\_ for background-colo
 ### Recommended setting
 - checkpoint : [mistoonAnime_v20](https://civitai.com/models/24149/mistoonanime) for anime, [xxmix9realistic_v40](https://civitai.com/models/47274) for photoreal
 - scheduler : "k_dpmpp_sde"
-- upscale : Enable controlnet_tile and controlnet_ip2p only. If you can provide a good reference image, controlnet_ref may also be useful.
+- upscale : Enable controlnet_tile and controlnet_ip2p only.
+- lora and ip adapter
 
 ### Recommended settings for 8-12 GB of vram
-- max_samples_on_vram : Set to 0 if vram is insufficient when using controlnet
-- max_models_on_vram : 1
-- Generate at lower resolution and upscale to higher resolution
+- max_samples_on_vram : 0
+- max_models_on_vram : 0
+- Generate at lower resolution and upscale to higher resolution with lower the value of context.
+- In the latest version, the amount of vram used during generation has been reduced.
 ```sh
 animatediff generate -c config/prompts/your_config.json -W 384 -H 576 -L 48 -C 16
 animatediff tile-upscale output/2023-08-25T20-00-00-sample-mistoonanime_v20/00-341774366206100 -W 512
@@ -485,7 +594,11 @@ animatediff tile-upscale output/2023-08-25T20-00-00-sample-mistoonanime_v20/00-3
 - [sam-hq](https://github.com/SysCV/sam-hq)
 - [Grounded-Segment-Anything](https://github.com/IDEA-Research/Grounded-Segment-Anything)
 - [ProPainter](https://github.com/sczhou/ProPainter)
-
+- [rembg](https://github.com/danielgatis/rembg)
+- [anime-segmentation](https://github.com/SkyTNT/anime-segmentation)
+- [LCM-LoRA](https://github.com/luosiallen/latent-consistency-model)
+- [ControlNet-LLLite](https://github.com/kohya-ss/sd-scripts/blob/main/docs/train_lllite_README.md)
+- [Gradual Latent hires fix](https://github.com/kohya-ss/sd-scripts/tree/gradual_latent_hires_fix)
 <br>
 <br>
 <br>
