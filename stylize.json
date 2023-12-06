@@ -47,7 +47,7 @@
             "enable": true,
             "use_preprocessor": true,
             "guess_mode": false,
-            "controlnet_conditioning_scale": 0.1,
+            "controlnet_conditioning_scale": 0.3,
             "control_guidance_start": 0.0,
             "control_guidance_end": 1.0,
             "control_scale_list": []

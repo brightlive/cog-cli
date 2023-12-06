@@ -9,6 +9,7 @@ import tempfile
 import subprocess
 from cog import BasePredictor, Input, Path
 from animatediff.utils.tagger import get_labels
+import time
 
 FAKE_PROMPT_TRAVEL_JSON = """
 {{
@@ -118,7 +119,7 @@ class Predictor(BasePredictor):
         ),
         video_length: int = Input(
             description="Length of the video in frames (playback is at 8 fps e.g. 16 frames @ 8 fps is 2 seconds)",
-            default=16,
+            default=24,
             ge=1,
             le=1024,
         ),
@@ -217,7 +218,7 @@ class Predictor(BasePredictor):
         if path.upper() == "CUSTOM":
             path = self.download_custom_model(custom_base_model_url)
 
-
+        start_time = time.time()
 
         #print(f"{'-'*80}")
         #print(prompt_travel_json)
@@ -226,38 +227,39 @@ class Predictor(BasePredictor):
         #file_path = "config/prompts/custom_prompt_travel.json"
         file_path = "input/prompt.json"
 
-        img2video = True # Temp
+        img2video = False # Temp
         if img2video:
 
             os.system("mkdir input")
             os.system("cp brian512.png input/00000000.png")
 
-            # os.system("animatediff stylize create-config squidtoy.mp4")
-            prompt_map = get_labels(
-            frame_dir="input",
-            interval=1,
-            general_threshold=0.35,
-            character_threshold=0.85,
-            ignore_tokens=[],
-            with_confidence=True,
-            is_danbooru_format=False,
-            is_cpu = False,
-            )
-            print("prompt_map is " + str(prompt_map['0']))
+            # Tagging the input image, doesn't seem to be needed and adds 40s
+            # prompt_map = get_labels(
+            # frame_dir="input",
+            # interval=1,
+            # general_threshold=0.35,
+            # character_threshold=0.85,
+            # ignore_tokens=[],
+            # with_confidence=True,
+            # is_danbooru_format=False,
+            # is_cpu = False,
+            # )
+            # print("prompt_map is " + str(prompt_map['0']))
 
             with open('stylize.json', 'r', encoding='utf-8') as file:
                 data = json.load(file)
                 data['path'] = 'share/Stable-diffusion/' + path
                 data['prompt_map']['0'] = prompt
                 data['guidance_scale'] = guidance_scale
-                data['seed'] = seed
+                data['seed'] = [seed] # Need to fix this, causes error
                 data['steps'] = steps
-                data['controlnet_map']['controlnet_tile']['controlnet_conditioning_scale'] = 0.1
+                data['controlnet_map']['controlnet_tile']['controlnet_conditioning_scale'] = 0.8
                 data['controlnet_map']['controlnet_ip2p']['controlnet_conditioning_scale'] = 0.5
                 with open(file_path, 'w', encoding='utf-8') as file:
                     json.dump(data, file, indent=4)  # indent=4 for pretty printing
 
         else:
+            print("In non-img2video and steps is " + str(steps))
             prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
             dreambooth_path=f"share/Stable-diffusion/{path}",
             output_format=output_format,
@@ -318,15 +320,42 @@ class Predictor(BasePredictor):
         )
 
         print(f"Identified directory: {recent_dir}")
-        media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4"))]
+
+        # Get the first subdirectory of recent_dir
+        directories = [d for d in os.listdir(recent_dir)
+               if os.path.isdir(os.path.join(recent_dir, d)) and d.startswith("00-")]
+
+        if directories:
+            source_images_path = os.path.join(recent_dir, directories[0])
+            print("source_images_path is " + str(source_images_path))
+        else:
+            source_images_path = None  # or some other fallback in case there are no directories
+
+        out_path = Path(tempfile.mkdtemp()) / "output.mp4"
+
+        interpolate = False
+        if interpolate:
+            rife_path = os.path.join("data", "rife")
+            rife_path = os.path.abspath(rife_path)
+            print("rife_path is " + str(rife_path))
+            #os.system("echo 'export PATH=\"$PATH:/src/data/rife\"' >> ~/.bashrc")
+            #os.system("source ~/.bashrc")
+
+            os.environ["PATH"] += os.pathsep + rife_path
+
+
+            rife_command = "animatediff rife interpolate -M 2 -c h264 " + str(source_images_path)
+            print("rife_command is " + str(rife_command))
+            os.system(rife_command)
+            media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4")) and "rife" in f]
+        else:
+            media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4"))]
 
         if not media_files:
             raise ValueError(f"No GIF or MP4 files found in directory: {recent_dir}")
 
         media_path = os.path.join(recent_dir, media_files[0])
         print(f"Identified Media Path: {media_path}")
-
-        out_path = Path(tempfile.mkdtemp()) / "output.mp4"
 
         # Convert away from hev1 to more widely recognized codec
         os.system(
@@ -347,5 +376,14 @@ class Predictor(BasePredictor):
                     os.remove(item_path)
                 elif os.path.isdir(item_path):
                     shutil.rmtree(item_path)
+
+        end_time = time.time()
+
+        # Calculate the execution time
+        execution_time = end_time - start_time
+
+        # Print the result
+        print("img2video was " + str(img2video) + " and interpolate was " + str(interpolate))
+        print(f"Script execution time: {execution_time:.2f} seconds")
 
         return Path(out_path)
