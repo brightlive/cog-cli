@@ -44,7 +44,7 @@
         "preprocess_on_gpu": true,
         "is_loop": false,
         "controlnet_tile": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 0.3,
@@ -53,7 +53,7 @@
             "control_scale_list": []
         },
         "controlnet_ip2p": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 0.5,
@@ -62,7 +62,7 @@
             "control_scale_list": []
         },
         "controlnet_lineart_anime": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -71,7 +71,7 @@
             "control_scale_list": []
         },
         "controlnet_openpose": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -80,7 +80,7 @@
             "control_scale_list": []
         },
         "controlnet_softedge": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "preprocessor": {
                 "type": "softedge_pidsafe",
@@ -93,7 +93,7 @@
             "control_scale_list": []
         },
         "controlnet_shuffle": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -102,7 +102,7 @@
             "control_scale_list": []
         },
         "controlnet_depth": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -111,7 +111,7 @@
             "control_scale_list": []
         },
         "controlnet_canny": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -120,7 +120,7 @@
             "control_scale_list": []
         },
         "controlnet_inpaint": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -129,7 +129,7 @@
             "control_scale_list": []
         },
         "controlnet_lineart": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -138,7 +138,7 @@
             "control_scale_list": []
         },
         "controlnet_mlsd": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -156,7 +156,7 @@
             "control_scale_list": []
         },
         "controlnet_scribble": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,
@@ -165,7 +165,7 @@
             "control_scale_list": []
         },
         "controlnet_seg": {
-            "enable": true,
+            "enable": false,
             "use_preprocessor": true,
             "guess_mode": false,
             "controlnet_conditioning_scale": 1.0,

@@ -10,6 +10,7 @@ import subprocess
 from cog import BasePredictor, Input, Path
 from animatediff.utils.tagger import get_labels
 import time
+from google.cloud import storage
 
 FAKE_PROMPT_TRAVEL_JSON = """
 {{
@@ -43,6 +44,19 @@ FAKE_PROMPT_TRAVEL_JSON = """
 }}
 """
 
+def download_public_file(bucket_name, source_blob_name, destination_file_name):
+
+    storage_client = storage.Client.create_anonymous_client()
+
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(source_blob_name)
+    blob.download_to_filename(destination_file_name)
+
+    print(
+        "Downloaded public blob {} from bucket {} to {}.".format(
+            source_blob_name, bucket.name, destination_file_name
+        )
+    )
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
@@ -203,6 +217,10 @@ class Predictor(BasePredictor):
             choices=["mp4", "gif"],
         ),
         fps: int = Input(default=8, ge=1, le=60),
+        controlnetStrength: float = Input(default=0.1, ge=0.0, le=1.0),
+        ipAdapterStrength: float = Input(default=0.5, ge=0.0, le=1.0),
+        face: bool = Input(default=False),
+        referenceImg: str = Input(default=None),
         seed: int = Input(
             description="Seed for different images and reproducibility. Use -1 to randomise seed",
             default=-1,
@@ -227,38 +245,76 @@ class Predictor(BasePredictor):
         #file_path = "config/prompts/custom_prompt_travel.json"
         file_path = "input/prompt.json"
 
-        img2video = False # Temp
-        if img2video:
-
+        if referenceImg is not None and referenceImg != "":
+            img2video = True
             os.system("mkdir input")
-            os.system("cp brian512.png input/00000000.png")
+            #os.system("cp brian512.png input/00000000.png") #temp
+            download_public_file("bright-live-ai-staging.appspot.com", referenceImg, "input/00000000.png")
+            os.system("mkdir input/controlnet_normalbae")
+            for f in range(0, video_length):
+                os.system("cp input/00000000.png input/controlnet_normalbae/000000" + f"{f:02d}" + ".png")
 
-            # Tagging the input image, doesn't seem to be needed and adds 40s
-            # prompt_map = get_labels(
-            # frame_dir="input",
-            # interval=1,
-            # general_threshold=0.35,
-            # character_threshold=0.85,
-            # ignore_tokens=[],
-            # with_confidence=True,
-            # is_danbooru_format=False,
-            # is_cpu = False,
-            # )
-            # print("prompt_map is " + str(prompt_map['0']))
+            # Tagging the input image
+            prompt_map = get_labels(
+            frame_dir="input",
+            interval=1,
+            general_threshold=0.35,
+            character_threshold=0.85,
+            ignore_tokens=[],
+            with_confidence=True,
+            is_danbooru_format=False,
+            is_cpu = False,
+            )
+            tags = str(prompt_map['0'])
+            print("prompt_map is " + tags)
+
+
+            # Parsing the input string into tuples
+            parsed_data = [tuple(item.replace("(", "").replace(")", "").split(":")) for item in tags.split("),(")]
+
+            # Converting the value part of each tuple from string to float
+            parsed_data = [(label, float(value)) for label, value in parsed_data]
+
+            # Sorting the list by value in descending order and selecting the first four items
+            # top = sorted(parsed_data, key=lambda x: x[1], reverse=True)[:4]
+            # Filter out all values less than 0.6
+            top = [item for item in parsed_data if item[1] >= 0.6]
+
+            # Combining the top items back into a string
+            tags_modified = ",".join([f"({label}:{value})" for label, value in top])
+
+            print("tags modified is " + tags_modified)
+
+            # ALWAYS SET CONTROLNET STRENGTH TO 0 FOR NOW, IP ADAPTER STRENGTH TO 0.7
+            controlnetStrength = 0.0
+            ipAdapterStrength = 0.7
 
             with open('stylize.json', 'r', encoding='utf-8') as file:
                 data = json.load(file)
                 data['path'] = 'share/Stable-diffusion/' + path
+                data['tail_prompt'] = tags_modified
                 data['prompt_map']['0'] = prompt
                 data['guidance_scale'] = guidance_scale
                 data['seed'] = [seed] # Need to fix this, causes error
                 data['steps'] = steps
-                data['controlnet_map']['controlnet_tile']['controlnet_conditioning_scale'] = 0.8
-                data['controlnet_map']['controlnet_ip2p']['controlnet_conditioning_scale'] = 0.5
+                data['ip_adapter_map']['is_face'] = face
+                if face:
+                    controlnetStrength = 0.0
+                    ipAdapterStrength = 0.7
+                else:
+                    controlnetStrength = 0.4
+                    ipAdapterStrength = 0.5
+                data['controlnet_map']['controlnet_normalbae']['controlnet_conditioning_scale'] = controlnetStrength
+                data['ip_adapter_map']['scale'] = ipAdapterStrength
+                if ipAdapterStrength == 0.0:
+                    data['ip_adapter_map']['enable'] = False
+                if controlnetStrength == 0.0:
+                    data['controlnet_map']['controlnet_normalbae']['enable'] = False
                 with open(file_path, 'w', encoding='utf-8') as file:
                     json.dump(data, file, indent=4)  # indent=4 for pretty printing
 
         else:
+            img2video = False
             print("In non-img2video and steps is " + str(steps))
             prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
             dreambooth_path=f"share/Stable-diffusion/{path}",
@@ -270,7 +326,7 @@ class Predictor(BasePredictor):
             head_prompt=prompt,
             tail_prompt=tail_prompt,
             negative_prompt=negative_prompt,
-            fps=fps,
+            fps=8, # Always generate at 8 fps, interpolate later based on fps value handed in
             prompt_map=self.transform_prompt_map(prompt_map),
             scheduler=scheduler,
             clip_skip=clip_skip,
@@ -333,18 +389,17 @@ class Predictor(BasePredictor):
 
         out_path = Path(tempfile.mkdtemp()) / "output.mp4"
 
-        interpolate = False
+        interpolate = fps > 8
         if interpolate:
-            rife_path = os.path.join("data", "rife")
-            rife_path = os.path.abspath(rife_path)
-            print("rife_path is " + str(rife_path))
-            #os.system("echo 'export PATH=\"$PATH:/src/data/rife\"' >> ~/.bashrc")
-            #os.system("source ~/.bashrc")
+            #rife_path = os.path.join("data", "rife")
+            #rife_path = os.path.abspath(rife_path)
+            #print("rife_path is " + str(rife_path))
 
-            os.environ["PATH"] += os.pathsep + rife_path
+            #os.environ["PATH"] += os.pathsep + rife_path
 
+            multipler = int(fps / 8)
 
-            rife_command = "animatediff rife interpolate -M 2 -c h264 " + str(source_images_path)
+            rife_command = "animatediff rife interpolate -M " + str(multipler) + " -c h264 " + str(source_images_path)
             print("rife_command is " + str(rife_command))
             os.system(rife_command)
             media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4")) and "rife" in f]
@@ -383,6 +438,11 @@ class Predictor(BasePredictor):
         execution_time = end_time - start_time
 
         # Print the result
+        if referenceImg != None:
+            print("referenceImg was " + str(referenceImg))
+        else:
+            print("No referenceImg")
+        print("controlnetStrength was " + str(controlnetStrength) + " and ipAdapterStrength was " + str(ipAdapterStrength))
         print("img2video was " + str(img2video) + " and interpolate was " + str(interpolate))
         print(f"Script execution time: {execution_time:.2f} seconds")
 

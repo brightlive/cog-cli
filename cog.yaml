@@ -54,6 +54,7 @@ build:
     - "gitpython"
     - "mediapipe"
     - "xformers"
+    - "google-cloud-storage"
     - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git"
     - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git#egg=animatediff[stylize]"
     - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git#egg=animatediff[rife]"
