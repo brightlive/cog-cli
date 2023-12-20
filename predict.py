@@ -420,7 +420,7 @@ class Predictor(BasePredictor):
         parent_dir = os.path.dirname(media_path)
         grandparent_dir = os.path.dirname(parent_dir)
 
-        delete = False
+        delete = True
         if delete == True:
             # Delete everything in output folder (including any prior gens that may be hanging around)
             for item in os.listdir(grandparent_dir):
