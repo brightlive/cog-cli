@@ -249,7 +249,7 @@ class Predictor(BasePredictor):
             img2video = True
             os.system("mkdir input")
             #os.system("cp brian512.png input/00000000.png") #temp
-            download_public_file("bright-live-ai-staging.appspot.com", referenceImg, "input/00000000.png")
+            download_public_file("bright-live-ai.appspot.com", referenceImg, "input/00000000.png")
             os.system("mkdir input/controlnet_normalbae")
             for f in range(0, video_length):
                 os.system("cp input/00000000.png input/controlnet_normalbae/000000" + f"{f:02d}" + ".png")
