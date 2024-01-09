@@ -349,7 +349,7 @@ class Predictor(BasePredictor):
             "-H",
             str(height),
             "-L",
-            str(video_length / fpsMultipler),
+            str(int(video_length / fpsMultipler)),
             "-C",
             str(context),
         ]
