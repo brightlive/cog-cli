@@ -337,6 +337,8 @@ class Predictor(BasePredictor):
             with open(file_path, "w") as file:
                 file.write(prompt_travel_json)
 
+        fpsMultipler = int(fps / 8)
+
         cmd = [
             "animatediff",
             "generate",
@@ -347,7 +349,7 @@ class Predictor(BasePredictor):
             "-H",
             str(height),
             "-L",
-            str(video_length),
+            str(video_length / fpsMultipler),
             "-C",
             str(context),
         ]
@@ -397,9 +399,9 @@ class Predictor(BasePredictor):
 
             #os.environ["PATH"] += os.pathsep + rife_path
 
-            multipler = int(fps / 8)
 
-            rife_command = "animatediff rife interpolate -M " + str(multipler) + " -c h264 " + str(source_images_path)
+
+            rife_command = "animatediff rife interpolate -M " + str(fpsMultipler) + " -c h264 " + str(source_images_path)
             print("rife_command is " + str(rife_command))
             os.system(rife_command)
             media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4")) and "rife" in f]
