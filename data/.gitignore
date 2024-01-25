@@ -2,4 +2,3 @@
 !.gitignore
 !/models/
 !/embeddings/
-!/rife/
