@@ -7,17 +7,19 @@ import re
 import tempfile
 import subprocess
 from cog import BasePredictor, Input, Path
+import time
 
 FAKE_PROMPT_TRAVEL_JSON = """
 {{
   "name": "sample",
   "path": "{dreambooth_path}",
+  "lcm_map": {{}},
   "motion_module": "models/motion-module/mm_sd_v15_v2.ckpt",
   "compile": false,
   "seed": [
     {seed}
   ],
-  "scheduler": "{scheduler}",
+  "scheduler": "lcm",
   "steps": {steps},
   "guidance_scale": {guidance_scale},
   "clip_skip": {clip_skip},
@@ -215,6 +217,8 @@ class Predictor(BasePredictor):
         if path.upper() == "CUSTOM":
             path = self.download_custom_model(custom_base_model_url)
 
+        start_time = time.time()
+
         prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
             dreambooth_path=f"share/Stable-diffusion/{path}",
             output_format=output_format,
@@ -300,13 +304,16 @@ class Predictor(BasePredictor):
         grandparent_dir = os.path.dirname(parent_dir)
 
         # Delete everything in output folder (including any prior gens that may be hanging around)
-        for item in os.listdir(grandparent_dir):
-            item_path = os.path.join(grandparent_dir, item)
-            print(f"Deleting item at path: {item_path}")
-            # Check if it's a file or directory and delete accordingly
-            if os.path.isfile(item_path):
-                os.remove(item_path)
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-
+        # for item in os.listdir(grandparent_dir):
+        #     item_path = os.path.join(grandparent_dir, item)
+        #     print(f"Deleting item at path: {item_path}")
+        #     # Check if it's a file or directory and delete accordingly
+        #     if os.path.isfile(item_path):
+        #         os.remove(item_path)
+        #     elif os.path.isdir(item_path):
+        #         shutil.rmtree(item_path)
+        # Calculate the execution time
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Script execution time: {execution_time:.2f} seconds")
         return Path(out_path)
