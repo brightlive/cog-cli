@@ -887,7 +887,8 @@ def run_upscale(
     images = get_resized_images(org_imgs, us_width, us_height)
 
     steps = steps if "steps" not in upscale_config else upscale_config["steps"]
-    scheduler = scheduler if "scheduler" not in upscale_config else upscale_config["scheduler"]
+    #scheduler = scheduler if "scheduler" not in upscale_config else upscale_config["scheduler"]
+    scheduler = "k_dpmpp_sde"
     guidance_scale = guidance_scale if "guidance_scale" not in upscale_config else upscale_config["guidance_scale"]
     clip_skip = clip_skip if "clip_skip" not in upscale_config else upscale_config["clip_skip"]
     strength = strength if "strength" not in upscale_config else upscale_config["strength"]

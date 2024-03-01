@@ -55,14 +55,15 @@ build:
     - "mediapipe"
     - "xformers"
     - "google-cloud-storage"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git#egg=animatediff[stylize]"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git#egg=animatediff[rife]"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git#egg=animatediff[dwpose]"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git#egg=animatediff[stylize_mask]"
+    - "git+https://github.com/brightlive/cog-cli.git@fps-generate-upscale"
+    - "git+https://github.com/brightlive/cog-cli.git@fps-generate-upscale#egg=animatediff[stylize]"
+    - "git+https://github.com/brightlive/cog-cli.git@fps-generate-upscale#egg=animatediff[rife]"
+    - "git+https://github.com/brightlive/cog-cli.git@fps-generate-upscale#egg=animatediff[dwpose]"
+    - "git+https://github.com/brightlive/cog-cli.git@fps-generate-upscale#egg=animatediff[stylize_mask]"
 
   run:
     - "pip install --upgrade pip setuptools wheel"
+    - "pip install -e src/animatediff/"
     - "apt-get update && apt-get install -y ffmpeg && apt-get install -y libvulkan1"
     - "pip install imageio[ffmpeg]"
 

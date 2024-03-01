@@ -326,7 +326,7 @@ class Predictor(BasePredictor):
             head_prompt=prompt,
             tail_prompt=tail_prompt,
             negative_prompt=negative_prompt,
-            fps=8, # Always generate at 8 fps, interpolate later based on fps value handed in
+            fps=fps, # Now generate all frames without interpolation
             prompt_map=self.transform_prompt_map(prompt_map),
             scheduler=scheduler,
             clip_skip=clip_skip,
@@ -337,7 +337,7 @@ class Predictor(BasePredictor):
             with open(file_path, "w") as file:
                 file.write(prompt_travel_json)
 
-        fpsMultipler = int(fps / 8)
+        fpsMultipler = 1 #int(fps / 8)
 
         cmd = [
             "animatediff",
@@ -349,7 +349,7 @@ class Predictor(BasePredictor):
             "-H",
             str(height),
             "-L",
-            str(int(video_length / fpsMultipler)),
+            str(video_length),
             "-C",
             str(context),
         ]
@@ -391,7 +391,7 @@ class Predictor(BasePredictor):
 
         out_path = Path(tempfile.mkdtemp()) / "output.mp4"
 
-        interpolate = fps > 8
+        interpolate = False #fps > 8
         if interpolate:
             #rife_path = os.path.join("data", "rife")
             #rife_path = os.path.abspath(rife_path)
@@ -408,6 +408,12 @@ class Predictor(BasePredictor):
         else:
             media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4"))]
 
+        upscale = True
+        if upscale:
+            upscale_command = "animatediff tile-upscale " + str(source_images_path) + " -c " + file_path + " -W 1024"
+            print("upscale_command is " + str(upscale_command))
+            os.system(upscale_command)
+
         if not media_files:
             raise ValueError(f"No GIF or MP4 files found in directory: {recent_dir}")
 
@@ -422,7 +428,7 @@ class Predictor(BasePredictor):
         parent_dir = os.path.dirname(media_path)
         grandparent_dir = os.path.dirname(parent_dir)
 
-        delete = True
+        delete = False
         if delete == True:
             # Delete everything in output folder (including any prior gens that may be hanging around)
             for item in os.listdir(grandparent_dir):
