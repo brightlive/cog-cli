@@ -15,8 +15,12 @@ from google.cloud import storage
 FAKE_PROMPT_TRAVEL_JSON = """
 {{
   "name": "sample",
-  "path": "{dreambooth_path}",
-  "motion_module": "models/motion-module/mm_sd_v15_v2.ckpt",
+  "domain_lora_scale": 1.0,
+  "adapter_lora_path": "models/motion-module/v3_sd15_adapter.ckpt",
+  "dreambooth_path":   "realisticVisionV60B1_v51VAE.safetensors",
+  "path": "realisticVisionV60B1_v51VAE.safetensor",
+  "inference_config": "configs/inference/inference-v3.yaml",
+  "motion_module": "models/motion-module/mm_sd_v3_fp16.ckpt",
   "compile": false,
   "seed": [
     {seed}
@@ -44,6 +48,7 @@ FAKE_PROMPT_TRAVEL_JSON = """
 }}
 """
 
+
 def download_public_file(bucket_name, source_blob_name, destination_file_name):
 
     storage_client = storage.Client.create_anonymous_client()
@@ -57,6 +62,7 @@ def download_public_file(bucket_name, source_blob_name, destination_file_name):
             source_blob_name, bucket.name, destination_file_name
         )
     )
+
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
@@ -238,17 +244,17 @@ class Predictor(BasePredictor):
 
         start_time = time.time()
 
-        #print(f"{'-'*80}")
-        #print(prompt_travel_json)
-        #print(f"{'-'*80}")
+        # print(f"{'-'*80}")
+        # print(prompt_travel_json)
+        # print(f"{'-'*80}")
 
-        #file_path = "config/prompts/custom_prompt_travel.json"
+        # file_path = "config/prompts/custom_prompt_travel.json"
         file_path = "input/prompt.json"
 
         if referenceImg is not None and referenceImg != "":
             img2video = True
             os.system("mkdir input")
-            #os.system("cp brian512.png input/00000000.png") #temp
+            # os.system("cp brian512.png input/00000000.png") #temp
             download_public_file("bright-live-ai.appspot.com", referenceImg, "input/00000000.png")
             os.system("mkdir input/controlnet_normalbae")
             for f in range(0, video_length):
@@ -256,21 +262,22 @@ class Predictor(BasePredictor):
 
             # Tagging the input image
             prompt_map = get_labels(
-            frame_dir="input",
-            interval=1,
-            general_threshold=0.35,
-            character_threshold=0.85,
-            ignore_tokens=[],
-            with_confidence=True,
-            is_danbooru_format=False,
-            is_cpu = False,
+                frame_dir="input",
+                interval=1,
+                general_threshold=0.35,
+                character_threshold=0.85,
+                ignore_tokens=[],
+                with_confidence=True,
+                is_danbooru_format=False,
+                is_cpu=False,
             )
-            tags = str(prompt_map['0'])
+            tags = str(prompt_map["0"])
             print("prompt_map is " + tags)
 
-
             # Parsing the input string into tuples
-            parsed_data = [tuple(item.replace("(", "").replace(")", "").split(":")) for item in tags.split("),(")]
+            parsed_data = [
+                tuple(item.replace("(", "").replace(")", "").split(":")) for item in tags.split("),(")
+            ]
 
             # Converting the value part of each tuple from string to float
             parsed_data = [(label, float(value)) for label, value in parsed_data]
@@ -289,47 +296,49 @@ class Predictor(BasePredictor):
             controlnetStrength = 0.0
             ipAdapterStrength = 0.7
 
-            with open('stylize.json', 'r', encoding='utf-8') as file:
+            with open("stylize.json", "r", encoding="utf-8") as file:
                 data = json.load(file)
-                data['path'] = 'share/Stable-diffusion/' + path
-                data['tail_prompt'] = tags_modified
-                data['prompt_map']['0'] = prompt
-                data['guidance_scale'] = guidance_scale
-                data['seed'] = [seed] # Need to fix this, causes error
-                data['steps'] = steps
-                data['ip_adapter_map']['is_face'] = face
+                data["path"] = "share/Stable-diffusion/" + path
+                data["tail_prompt"] = tags_modified
+                data["prompt_map"]["0"] = prompt
+                data["guidance_scale"] = guidance_scale
+                data["seed"] = [seed]  # Need to fix this, causes error
+                data["steps"] = steps
+                data["ip_adapter_map"]["is_face"] = face
                 if face:
                     controlnetStrength = 0.0
                     ipAdapterStrength = 0.7
                 else:
                     controlnetStrength = 0.4
                     ipAdapterStrength = 0.5
-                data['controlnet_map']['controlnet_normalbae']['controlnet_conditioning_scale'] = controlnetStrength
-                data['ip_adapter_map']['scale'] = ipAdapterStrength
+                data["controlnet_map"]["controlnet_normalbae"][
+                    "controlnet_conditioning_scale"
+                ] = controlnetStrength
+                data["ip_adapter_map"]["scale"] = ipAdapterStrength
                 if ipAdapterStrength == 0.0:
-                    data['ip_adapter_map']['enable'] = False
+                    data["ip_adapter_map"]["enable"] = False
                 if controlnetStrength == 0.0:
-                    data['controlnet_map']['controlnet_normalbae']['enable'] = False
-                with open(file_path, 'w', encoding='utf-8') as file:
+                    data["controlnet_map"]["controlnet_normalbae"]["enable"] = False
+                with open(file_path, "w", encoding="utf-8") as file:
                     json.dump(data, file, indent=4)  # indent=4 for pretty printing
 
         else:
             img2video = False
             print("In non-img2video and steps is " + str(steps))
             prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
-            dreambooth_path=f"share/Stable-diffusion/{path}",
-            output_format=output_format,
-            seed=seed,
-            steps=steps,
-            guidance_scale=guidance_scale,
-            prompt_fixed_ratio=prompt_fixed_ratio,
-            head_prompt=prompt,
-            tail_prompt=tail_prompt,
-            negative_prompt=negative_prompt,
-            fps=8, # Always generate at 8 fps, interpolate later based on fps value handed in
-            prompt_map=self.transform_prompt_map(prompt_map),
-            scheduler=scheduler,
-            clip_skip=clip_skip,
+                dreambooth_path=f"share/Stable-diffusion/{path}",
+                output_format=output_format,
+                seed=seed,
+                steps=steps,
+                guidance_scale=guidance_scale,
+                prompt_fixed_ratio=prompt_fixed_ratio,
+                head_prompt=prompt,
+                tail_prompt=tail_prompt,
+                negative_prompt=negative_prompt,
+                fps=8,  # Always generate at 8 fps, interpolate later based on fps value handed in
+                prompt_map=self.transform_prompt_map(prompt_map),
+                scheduler=scheduler,
+                clip_skip=clip_skip,
             )
             directory = os.path.dirname(file_path)
             if not os.path.exists(directory):
@@ -380,8 +389,11 @@ class Predictor(BasePredictor):
         print(f"Identified directory: {recent_dir}")
 
         # Get the first subdirectory of recent_dir
-        directories = [d for d in os.listdir(recent_dir)
-               if os.path.isdir(os.path.join(recent_dir, d)) and d.startswith("00-")]
+        directories = [
+            d
+            for d in os.listdir(recent_dir)
+            if os.path.isdir(os.path.join(recent_dir, d)) and d.startswith("00-")
+        ]
 
         if directories:
             source_images_path = os.path.join(recent_dir, directories[0])
@@ -393,15 +405,15 @@ class Predictor(BasePredictor):
 
         interpolate = fps > 8
         if interpolate:
-            #rife_path = os.path.join("data", "rife")
-            #rife_path = os.path.abspath(rife_path)
-            #print("rife_path is " + str(rife_path))
+            # rife_path = os.path.join("data", "rife")
+            # rife_path = os.path.abspath(rife_path)
+            # print("rife_path is " + str(rife_path))
 
-            #os.environ["PATH"] += os.pathsep + rife_path
+            # os.environ["PATH"] += os.pathsep + rife_path
 
-
-
-            rife_command = "animatediff rife interpolate -M " + str(fpsMultipler) + " -c h264 " + str(source_images_path)
+            rife_command = (
+                "animatediff rife interpolate -M " + str(fpsMultipler) + " -c h264 " + str(source_images_path)
+            )
             print("rife_command is " + str(rife_command))
             os.system(rife_command)
             media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4")) and "rife" in f]
@@ -422,7 +434,7 @@ class Predictor(BasePredictor):
         parent_dir = os.path.dirname(media_path)
         grandparent_dir = os.path.dirname(parent_dir)
 
-        delete = True
+        delete = False
         if delete == True:
             # Delete everything in output folder (including any prior gens that may be hanging around)
             for item in os.listdir(grandparent_dir):
@@ -444,7 +456,12 @@ class Predictor(BasePredictor):
             print("referenceImg was " + str(referenceImg))
         else:
             print("No referenceImg")
-        print("controlnetStrength was " + str(controlnetStrength) + " and ipAdapterStrength was " + str(ipAdapterStrength))
+        print(
+            "controlnetStrength was "
+            + str(controlnetStrength)
+            + " and ipAdapterStrength was "
+            + str(ipAdapterStrength)
+        )
         print("img2video was " + str(img2video) + " and interpolate was " + str(interpolate))
         print(f"Script execution time: {execution_time:.2f} seconds")
 
