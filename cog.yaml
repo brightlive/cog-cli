@@ -63,9 +63,9 @@ build:
 
   run:
     - "pip install --upgrade pip setuptools wheel"
-    - "pip install -e src/animatediff/"
     - "apt-get update && apt-get install -y ffmpeg && apt-get install -y libvulkan1"
     - "pip install imageio[ffmpeg]"
+    - "pip install sentry-sdk"
 
 # predict.py defines how predictions are run on your model
 predict: "predict.py:Predictor"
