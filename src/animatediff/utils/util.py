@@ -1,172 +1,446 @@
-import os
-import imageio
-import numpy as np
-from typing import Union
+import logging
+from os import PathLike
+from pathlib import Path
+from typing import List
 
 import torch
-import torchvision
-import torch.distributed as dist
-
-from safetensors import safe_open
-from tqdm import tqdm
 from einops import rearrange
-from animatediff.utils.convert_from_ckpt import convert_ldm_unet_checkpoint, convert_ldm_clip_checkpoint, convert_ldm_vae_checkpoint
-from animatediff.utils.convert_lora_safetensor_to_diffusers import convert_lora, load_diffusers_lora
+from PIL import Image
+from torch import Tensor
+from torchvision.utils import save_image
+from tqdm.rich import tqdm
+
+logger = logging.getLogger(__name__)
+
+def save_frames(video: Tensor, frames_dir: PathLike, show_progress:bool=True):
+    frames_dir = Path(frames_dir)
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    frames = rearrange(video, "b c t h w -> t b c h w")
+    if show_progress:
+        for idx, frame in enumerate(tqdm(frames, desc=f"Saving frames to {frames_dir.stem}")):
+            save_image(frame, frames_dir.joinpath(f"{idx:08d}.png"))
+    else:
+        for idx, frame in enumerate(frames):
+            save_image(frame, frames_dir.joinpath(f"{idx:08d}.png"))
 
 
-def zero_rank_print(s):
-    if (not dist.is_initialized()) and (dist.is_initialized() and dist.get_rank() == 0): print("### " + s)
+def save_imgs(imgs:List[Image.Image], frames_dir: PathLike):
+    frames_dir = Path(frames_dir)
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    for idx, img in enumerate(tqdm(imgs, desc=f"Saving frames to {frames_dir.stem}")):
+        img.save( frames_dir.joinpath(f"{idx:08d}.png") )
 
+def save_video(video: Tensor, save_path: PathLike, fps: int = 8):
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
 
-def save_videos_grid(videos: torch.Tensor, path: str, rescale=False, n_rows=6, fps=8):
-    videos = rearrange(videos, "b c t h w -> t b c h w")
-    outputs = []
-    for x in videos:
-        x = torchvision.utils.make_grid(x, nrow=n_rows)
-        x = x.transpose(0, 1).transpose(1, 2).squeeze(-1)
-        if rescale:
-            x = (x + 1.0) / 2.0  # -1,1 -> 0,1
-        x = (x * 255).numpy().astype(np.uint8)
-        outputs.append(x)
+    if video.ndim == 5:
+        # batch, channels, frame, width, height -> frame, channels, width, height
+        frames = video.permute(0, 2, 1, 3, 4).squeeze(0)
+    elif video.ndim == 4:
+        # channels, frame, width, height -> frame, channels, width, height
+        frames = video.permute(1, 0, 2, 3)
+    else:
+        raise ValueError(f"video must be 4 or 5 dimensional, got {video.ndim}")
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    imageio.mimsave(path, outputs, fps=fps)
+    # Add 0.5 after unnormalizing to [0, 255] to round to the nearest integer
+    frames = frames.mul(255).add_(0.5).clamp_(0, 255).permute(0, 2, 3, 1).to("cpu", torch.uint8).numpy()
 
-
-# DDIM Inversion
-@torch.no_grad()
-def init_prompt(prompt, pipeline):
-    uncond_input = pipeline.tokenizer(
-        [""], padding="max_length", max_length=pipeline.tokenizer.model_max_length,
-        return_tensors="pt"
+    images = [Image.fromarray(frame) for frame in frames]
+    images[0].save(
+        fp=save_path, format="GIF", append_images=images[1:], save_all=True, duration=(1 / fps * 1000), loop=0
     )
-    uncond_embeddings = pipeline.text_encoder(uncond_input.input_ids.to(pipeline.device))[0]
-    text_input = pipeline.tokenizer(
-        [prompt],
-        padding="max_length",
-        max_length=pipeline.tokenizer.model_max_length,
-        truncation=True,
-        return_tensors="pt",
-    )
-    text_embeddings = pipeline.text_encoder(text_input.input_ids.to(pipeline.device))[0]
-    context = torch.cat([uncond_embeddings, text_embeddings])
-
-    return context
 
 
-def next_step(model_output: Union[torch.FloatTensor, np.ndarray], timestep: int,
-              sample: Union[torch.FloatTensor, np.ndarray], ddim_scheduler):
-    timestep, next_timestep = min(
-        timestep - ddim_scheduler.config.num_train_timesteps // ddim_scheduler.num_inference_steps, 999), timestep
-    alpha_prod_t = ddim_scheduler.alphas_cumprod[timestep] if timestep >= 0 else ddim_scheduler.final_alpha_cumprod
-    alpha_prod_t_next = ddim_scheduler.alphas_cumprod[next_timestep]
-    beta_prod_t = 1 - alpha_prod_t
-    next_original_sample = (sample - beta_prod_t ** 0.5 * model_output) / alpha_prod_t ** 0.5
-    next_sample_direction = (1 - alpha_prod_t_next) ** 0.5 * model_output
-    next_sample = alpha_prod_t_next ** 0.5 * next_original_sample + next_sample_direction
-    return next_sample
+def path_from_cwd(path: PathLike) -> str:
+    path = Path(path)
+    return str(path.absolute().relative_to(Path.cwd()))
 
 
-def get_noise_pred_single(latents, t, context, unet):
-    noise_pred = unet(latents, t, encoder_hidden_states=context)["sample"]
-    return noise_pred
+def resize_for_condition_image(input_image: Image, us_width: int, us_height: int):
+    input_image = input_image.convert("RGB")
+    H = int(round(us_height / 64.0)) * 64
+    W = int(round(us_width / 64.0)) * 64
+    img = input_image.resize((W, H), resample=Image.LANCZOS)
+    return img
+
+def get_resized_images(org_images_path: List[str], us_width: int, us_height: int):
+
+    images = [Image.open( p ) for p in org_images_path]
+
+    W, H = images[0].size
+
+    if us_width == -1:
+        us_width = W/H * us_height
+    elif us_height == -1:
+        us_height = H/W * us_width
+
+    return [resize_for_condition_image(img, us_width, us_height) for img in images]
+
+def get_resized_image(org_image_path: str, us_width: int, us_height: int):
+
+    image = Image.open( org_image_path )
+
+    W, H = image.size
+
+    if us_width == -1:
+        us_width = W/H * us_height
+    elif us_height == -1:
+        us_height = H/W * us_width
+
+    return resize_for_condition_image(image, us_width, us_height)
+
+def get_resized_image2(org_image_path: str, size: int):
+
+    image = Image.open( org_image_path )
+
+    W, H = image.size
+
+    if size < 0:
+        return resize_for_condition_image(image, W, H)
+
+    if W < H:
+        us_width = size
+        us_height = int(size * H/W)
+    else:
+        us_width = int(size * W/H)
+        us_height = size
+
+    return resize_for_condition_image(image, us_width, us_height)
 
 
-@torch.no_grad()
-def ddim_loop(pipeline, ddim_scheduler, latent, num_inv_steps, prompt):
-    context = init_prompt(prompt, pipeline)
-    uncond_embeddings, cond_embeddings = context.chunk(2)
-    all_latent = [latent]
-    latent = latent.clone().detach()
-    for i in tqdm(range(num_inv_steps)):
-        t = ddim_scheduler.timesteps[len(ddim_scheduler.timesteps) - i - 1]
-        noise_pred = get_noise_pred_single(latent, t, cond_embeddings, pipeline.unet)
-        latent = next_step(noise_pred, t, latent, ddim_scheduler)
-        all_latent.append(latent)
-    return all_latent
+def show_gpu(comment):
+    pass
+#    import GPUtil
+#    torch.cuda.synchronize()
+#    logger.info(comment)
+#    GPUtil.showUtilization()
 
 
-@torch.no_grad()
-def ddim_inversion(pipeline, ddim_scheduler, video_latent, num_inv_steps, prompt=""):
-    ddim_latents = ddim_loop(pipeline, ddim_scheduler, video_latent, num_inv_steps, prompt)
-    return ddim_latents
+PROFILE_ON = False
 
-def load_weights(
-    animation_pipeline,
-    # motion module
-    motion_module_path         = "",
-    motion_module_lora_configs = [],
-    # domain adapter
-    adapter_lora_path          = "",
-    adapter_lora_scale         = 1.0,
-    # image layers
-    dreambooth_model_path      = "",
-    lora_model_path            = "",
-    lora_alpha                 = 0.8,
-):
-    # motion module
-    unet_state_dict = {}
-    if motion_module_path != "":
-        print(f"load motion module from {motion_module_path}")
-        motion_module_state_dict = torch.load(motion_module_path, map_location="cpu")
-        motion_module_state_dict = motion_module_state_dict["state_dict"] if "state_dict" in motion_module_state_dict else motion_module_state_dict
-        unet_state_dict.update({name: param for name, param in motion_module_state_dict.items() if "motion_modules." in name})
-        unet_state_dict.pop("animatediff_config", "")
-    
-    missing, unexpected = animation_pipeline.unet.load_state_dict(unet_state_dict, strict=False)
-    assert len(unexpected) == 0
-    del unet_state_dict
+def start_profile():
+    if PROFILE_ON:
+        import cProfile
 
-    # base model
-    if dreambooth_model_path != "":
-        print(f"load dreambooth model from {dreambooth_model_path}")
-        if dreambooth_model_path.endswith(".safetensors"):
-            dreambooth_state_dict = {}
-            with safe_open(dreambooth_model_path, framework="pt", device="cpu") as f:
-                for key in f.keys():
-                    dreambooth_state_dict[key] = f.get_tensor(key)
-        elif dreambooth_model_path.endswith(".ckpt"):
-            dreambooth_state_dict = torch.load(dreambooth_model_path, map_location="cpu")
-            
-        # 1. vae
-        converted_vae_checkpoint = convert_ldm_vae_checkpoint(dreambooth_state_dict, animation_pipeline.vae.config)
-        animation_pipeline.vae.load_state_dict(converted_vae_checkpoint)
-        # 2. unet
-        converted_unet_checkpoint = convert_ldm_unet_checkpoint(dreambooth_state_dict, animation_pipeline.unet.config)
-        animation_pipeline.unet.load_state_dict(converted_unet_checkpoint, strict=False)
-        # 3. text_model
-        animation_pipeline.text_encoder = convert_ldm_clip_checkpoint(dreambooth_state_dict)
-        del dreambooth_state_dict
-        
-    # lora layers
-    if lora_model_path != "":
-        print(f"load lora model from {lora_model_path}")
-        assert lora_model_path.endswith(".safetensors")
-        lora_state_dict = {}
-        with safe_open(lora_model_path, framework="pt", device="cpu") as f:
-            for key in f.keys():
-                lora_state_dict[key] = f.get_tensor(key)
-                
-        animation_pipeline = convert_lora(animation_pipeline, lora_state_dict, alpha=lora_alpha)
-        del lora_state_dict
+        pr = cProfile.Profile()
+        pr.enable()
+        return pr
+    else:
+        return None
 
-    # domain adapter lora
-    if adapter_lora_path != "":
-        print(f"load domain lora from {adapter_lora_path}")
-        domain_lora_state_dict = torch.load(adapter_lora_path, map_location="cpu")
-        domain_lora_state_dict = domain_lora_state_dict["state_dict"] if "state_dict" in domain_lora_state_dict else domain_lora_state_dict
-        domain_lora_state_dict.pop("animatediff_config", "")
+def end_profile(pr, file_name):
+    if PROFILE_ON:
+        import io
+        import pstats
 
-        animation_pipeline = load_diffusers_lora(animation_pipeline, domain_lora_state_dict, alpha=adapter_lora_scale)
+        pr.disable()
+        s = io.StringIO()
+        ps = pstats.Stats(pr, stream=s).sort_stats('cumtime')
+        ps.print_stats()
 
-    # motion module lora
-    for motion_module_lora_config in motion_module_lora_configs:
-        path, alpha = motion_module_lora_config["path"], motion_module_lora_config["alpha"]
-        print(f"load motion LoRA from {path}")
-        motion_lora_state_dict = torch.load(path, map_location="cpu")
-        motion_lora_state_dict = motion_lora_state_dict["state_dict"] if "state_dict" in motion_lora_state_dict else motion_lora_state_dict
-        motion_lora_state_dict.pop("animatediff_config", "")
+        with open(file_name, 'w+') as f:
+            f.write(s.getvalue())
 
-        animation_pipeline = load_diffusers_lora(animation_pipeline, motion_lora_state_dict, alpha)
+STOPWATCH_ON = False
 
-    return animation_pipeline
+time_record = []
+start_time = 0
+
+def stopwatch_start():
+    global start_time,time_record
+    import time
+
+    if STOPWATCH_ON:
+        time_record = []
+        torch.cuda.synchronize()
+        start_time = time.time()
+
+def stopwatch_record(comment):
+    import time
+
+    if STOPWATCH_ON:
+        torch.cuda.synchronize()
+        time_record.append(((time.time() - start_time) , comment))
+
+def stopwatch_stop(comment):
+
+    if STOPWATCH_ON:
+        stopwatch_record(comment)
+
+        for rec in time_record:
+            logger.info(rec)
+
+
+def prepare_ip_adapter():
+    import os
+    from pathlib import PurePosixPath
+
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs("data/models/ip_adapter/models/image_encoder", exist_ok=True)
+    for hub_file in [
+        "models/image_encoder/config.json",
+        "models/image_encoder/pytorch_model.bin",
+        "models/ip-adapter-plus_sd15.bin",
+        "models/ip-adapter_sd15.bin",
+        "models/ip-adapter-plus-face_sd15.bin"
+    ]:
+        path = Path(hub_file)
+
+        saved_path = "data/models/ip_adapter" / path
+
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="h94/IP-Adapter", subfolder=PurePosixPath(path.parent), filename=PurePosixPath(path.name), local_dir="data/models/ip_adapter"
+        )
+
+def prepare_motion_module():
+    import os
+    from pathlib import PurePosixPath
+
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs("data/models/motion-module", exist_ok=True)
+    for hub_file in [
+        "mm_sd_v15_v2.ckpt",
+    ]:
+        path = Path(hub_file)
+
+        saved_path = "data/models/motion-module" / path
+
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="guoyww/animatediff", subfolder=PurePosixPath(path.parent), filename=PurePosixPath(path.name), local_dir="data/models/motion-module"
+        )
+
+def prepare_wd14tagger():
+    import os
+    from pathlib import PurePosixPath
+
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs("data/models/WD14tagger", exist_ok=True)
+    for hub_file in [
+        "model.onnx",
+        "selected_tags.csv",
+    ]:
+        path = Path(hub_file)
+
+        saved_path = "data/models/WD14tagger" / path
+
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="SmilingWolf/wd-v1-4-moat-tagger-v2", subfolder=PurePosixPath(path.parent), filename=PurePosixPath(path.name), local_dir="data/models/WD14tagger"
+        )
+
+def prepare_dwpose():
+    import os
+    from pathlib import PurePosixPath
+
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs("data/models/DWPose", exist_ok=True)
+    for hub_file in [
+        "dw-ll_ucoco_384.onnx",
+        "yolox_l.onnx",
+    ]:
+        path = Path(hub_file)
+
+        saved_path = "data/models/DWPose" / path
+
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="yzd-v/DWPose", subfolder=PurePosixPath(path.parent), filename=PurePosixPath(path.name), local_dir="data/models/DWPose"
+        )
+
+
+
+def prepare_softsplat():
+    import os
+    from pathlib import PurePosixPath
+
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs("data/models/softsplat", exist_ok=True)
+    for hub_file in [
+        "softsplat-lf",
+    ]:
+        path = Path(hub_file)
+
+        saved_path = "data/models/softsplat" / path
+
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="s9roll74/softsplat_mirror", subfolder=PurePosixPath(path.parent), filename=PurePosixPath(path.name), local_dir="data/models/softsplat"
+        )
+
+
+def extract_frames(movie_file_path, fps, out_dir, aspect_ratio, duration, offset, size_of_short_edge=-1):
+    import ffmpeg
+
+    probe = ffmpeg.probe(movie_file_path)
+    video = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+    width = int(video['width'])
+    height = int(video['height'])
+
+    node = ffmpeg.input( str(movie_file_path.resolve()) )
+
+    node = node.filter( "fps", fps=fps )
+
+
+    if duration > 0:
+        node = node.trim(start=offset,end=offset+duration).setpts('PTS-STARTPTS')
+    elif offset > 0:
+        node = node.trim(start=offset).setpts('PTS-STARTPTS')
+
+    if size_of_short_edge != -1:
+        if width < height:
+            r = height / width
+            width = size_of_short_edge
+            height = int( (size_of_short_edge * r)//2 * 2)
+            node = node.filter('scale', size_of_short_edge, -1)
+        else:
+            r = width / height
+            height = size_of_short_edge
+            width = int( (size_of_short_edge * r)//2 * 2)
+            node = node.filter('scale', -1, size_of_short_edge)
+
+    if aspect_ratio > 0:
+        # aspect ratio (width / height)
+        ww = round(height * aspect_ratio)
+        if ww < width:
+            x= (width - ww)//2
+            y= 0
+            w = ww
+            h = height
+        else:
+            hh = round(width/aspect_ratio)
+            x = 0
+            y = (height - hh)//2
+            w = width
+            h = hh
+        w = int(w // 2 * 2)
+        h = int(h // 2 * 2)
+        logger.info(f"crop to {w=},{h=}")
+        node = node.crop(x, y, w, h)
+
+    node = node.output( str(out_dir.resolve().joinpath("%08d.png")), start_number=0 )
+
+    node.run(quiet=True, overwrite_output=True)
+
+
+
+
+
+
+def is_v2_motion_module(motion_module_path:Path):
+    if motion_module_path.suffix == ".safetensors":
+        from safetensors.torch import load_file
+        loaded = load_file(motion_module_path, "cpu")
+    else:
+        from torch import load
+        loaded = load(motion_module_path, "cpu")
+
+    is_v2 = "mid_block.motion_modules.0.temporal_transformer.norm.bias" in loaded
+
+    loaded = None
+    torch.cuda.empty_cache()
+
+    logger.info(f"{is_v2=}")
+
+    return is_v2
+
+
+
+
+tensor_interpolation = None
+
+def get_tensor_interpolation_method():
+    return tensor_interpolation
+
+def set_tensor_interpolation_method(is_slerp):
+    global tensor_interpolation
+    tensor_interpolation = slerp if is_slerp else linear
+
+def linear(v1, v2, t):
+    return (1.0 - t) * v1 + t * v2
+
+def slerp(
+    v0: torch.Tensor, v1: torch.Tensor, t: float, DOT_THRESHOLD: float = 0.9995
+) -> torch.Tensor:
+    u0 = v0 / v0.norm()
+    u1 = v1 / v1.norm()
+    dot = (u0 * u1).sum()
+    if dot.abs() > DOT_THRESHOLD:
+        #logger.info(f'warning: v0 and v1 close to parallel, using linear interpolation instead.')
+        return (1.0 - t) * v0 + t * v1
+    omega = dot.acos()
+    return (((1.0 - t) * omega).sin() * v0 + (t * omega).sin() * v1) / omega.sin()
+
+
+
+def prepare_sam_hq(low_vram):
+    import os
+    from pathlib import PurePosixPath
+
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs("data/models/SAM", exist_ok=True)
+    for hub_file in [
+        "sam_hq_vit_h.pth" if not low_vram else "sam_hq_vit_b.pth"
+    ]:
+        path = Path(hub_file)
+
+        saved_path = "data/models/SAM" / path
+
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="lkeab/hq-sam", subfolder=PurePosixPath(path.parent), filename=PurePosixPath(path.name), local_dir="data/models/SAM"
+        )
+
+def prepare_groundingDINO():
+    import os
+    from pathlib import PurePosixPath
+
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs("data/models/GroundingDINO", exist_ok=True)
+    for hub_file in [
+        "groundingdino_swinb_cogcoor.pth",
+    ]:
+        path = Path(hub_file)
+
+        saved_path = "data/models/GroundingDINO" / path
+
+        if os.path.exists(saved_path):
+            continue
+
+        hf_hub_download(
+            repo_id="ShilongLiu/GroundingDINO", subfolder=PurePosixPath(path.parent), filename=PurePosixPath(path.name), local_dir="data/models/GroundingDINO"
+        )
+
+
+def prepare_propainter():
+    import os
+
+    import git
+
+    if os.path.isdir("src/animatediff/repo/ProPainter"):
+        if os.listdir("src/animatediff/repo/ProPainter"):
+            return
+
+    repo = git.Repo.clone_from(url="https://github.com/sczhou/ProPainter", to_path="src/animatediff/repo/ProPainter", no_checkout=True )
+    repo.git.checkout("a8a5827ca5e7e8c1b4c360ea77cbb2adb3c18370")

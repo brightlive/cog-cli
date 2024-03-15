@@ -55,11 +55,11 @@ build:
     - "mediapipe"
     - "xformers"
     - "google-cloud-storage"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git@v3"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git@v3#egg=animatediff[stylize]"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git@v3#egg=animatediff[rife]"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git@v3#egg=animatediff[dwpose]"
-    - "git+https://github.com/zsxkib/animatediff-cli-prompt-travel.git@v3#egg=animatediff[stylize_mask]"
+    - "git+https://github.com/brightlive/cog-cli.git@v3"
+    - "git+https://github.com/brightlive/cog-cli.git@v3#egg=animatediff[stylize]"
+    - "git+https://github.com/brightlive/cog-cli.git@v3#egg=animatediff[rife]"
+    - "git+https://github.com/brightlive/cog-cli.git@v3#egg=animatediff[dwpose]"
+    - "git+https://github.com/brightlive/cog-cli.git@v3#egg=animatediff[stylize_mask]"
 
   run:
     - "pip install --upgrade pip setuptools wheel"
