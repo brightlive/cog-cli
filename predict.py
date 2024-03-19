@@ -20,7 +20,7 @@ FAKE_PROMPT_TRAVEL_JSON = """
   "dreambooth_path":   "realisticVisionV60B1_v51VAE.safetensors",
   "path": "realisticVisionV60B1_v51VAE.safetensor",
   "inference_config": "configs/inference/inference-v3.yaml",
-  "motion_module": "models/motion-module/mm_sd_v3_fp16.ckpt",
+  "motion_module": "models/motion-module/mm_sd_v3_fp16.safetensors",
   "compile": false,
   "seed": [
     {seed}
