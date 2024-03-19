@@ -129,6 +129,7 @@ class ModelConfig(BaseSettings):
     prompt_fixed_ratio: float = 1.0
     dreambooth_path: Path = Field(...)
     inference_config: Path = Field(...)
+    domain_lora_scale: float = 1.0
 
     class Config(JsonConfig):
         json_config_path: Path
