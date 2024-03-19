@@ -11,15 +11,20 @@ from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.models import ModelMixin
 from diffusers.models.attention_processor import AttentionProcessor
 from diffusers.models.embeddings import TimestepEmbedding, Timesteps
-from diffusers.utils import (SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME,
-                             BaseOutput, logging)
+from diffusers.utils import SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME, BaseOutput, logging
 from safetensors.torch import load_file
 from torch import Tensor, nn
 
 from .resnet import InflatedConv3d, InflatedGroupNorm
-from .unet_blocks import (CrossAttnDownBlock3D, CrossAttnUpBlock3D,
-                          DownBlock3D, UNetMidBlock3DCrossAttn, UpBlock3D,
-                          get_down_block, get_up_block)
+from .unet_blocks import (
+    CrossAttnDownBlock3D,
+    CrossAttnUpBlock3D,
+    DownBlock3D,
+    UNetMidBlock3DCrossAttn,
+    UpBlock3D,
+    get_down_block,
+    get_up_block,
+)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -146,8 +151,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                 unet_use_temporal_attention=unet_use_temporal_attention,
                 use_inflated_groupnorm=use_inflated_groupnorm,
                 use_motion_module=use_motion_module
-                    and (res in motion_module_resolutions)
-                    and (not motion_module_decoder_only),
+                and (res in motion_module_resolutions)
+                and (not motion_module_decoder_only),
                 motion_module_type=motion_module_type,
                 motion_module_kwargs=motion_module_kwargs,
             )
@@ -231,9 +236,13 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
 
         # out
         if use_inflated_groupnorm:
-            self.conv_norm_out = InflatedGroupNorm(num_channels=block_out_channels[0], num_groups=norm_num_groups, eps=norm_eps)
+            self.conv_norm_out = InflatedGroupNorm(
+                num_channels=block_out_channels[0], num_groups=norm_num_groups, eps=norm_eps
+            )
         else:
-            self.conv_norm_out = nn.GroupNorm(num_channels=block_out_channels[0], num_groups=norm_num_groups, eps=norm_eps)
+            self.conv_norm_out = nn.GroupNorm(
+                num_channels=block_out_channels[0], num_groups=norm_num_groups, eps=norm_eps
+            )
 
         self.conv_act = nn.SiLU()
         self.conv_out = InflatedConv3d(block_out_channels[0], out_channels, kernel_size=3, padding=1)
@@ -429,8 +438,6 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                     temb=emb,
                     encoder_hidden_states=encoder_hidden_states,
                     attention_mask=attention_mask,
-                    cross_attention_kwargs=cross_attention_kwargs,
-                    encoder_attention_mask=encoder_attention_mask,
                 )
             else:
                 sample, res_samples = downsample_block(
@@ -459,7 +466,6 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
                 attention_mask=attention_mask,
                 cross_attention_kwargs=cross_attention_kwargs,
             )
-
 
         if mid_block_additional_residual is not None:
             sample = sample + mid_block_additional_residual
@@ -579,7 +585,6 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
 
         return model
 
-
     @property
     def attn_processors(self) -> Dict[str, AttentionProcessor]:
         r"""
@@ -640,4 +645,3 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         for name, module in self.named_children():
             if "temporal_transformer" not in name:
                 fn_recursive_attn_processor(name, module, processor)
-

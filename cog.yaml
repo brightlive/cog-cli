@@ -55,9 +55,10 @@ build:
     - "mediapipe"
     - "xformers"
     - "google-cloud-storage"
-    #- "google-cloud-bigquery" # useless
+    - "google-cloud-bigquery" # useless
     - "google-cloud-bigquery-storage" # useless
     - "easydict" # useless
+    - "easyparse" # useless
     - "git+https://github.com/brightlive/cog-cli.git@v3"
     - "git+https://github.com/brightlive/cog-cli.git@v3#egg=animatediff[stylize]"
     - "git+https://github.com/brightlive/cog-cli.git@v3#egg=animatediff[rife]"
