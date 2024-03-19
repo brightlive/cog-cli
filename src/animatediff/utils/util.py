@@ -380,6 +380,7 @@ def is_v2_motion_module(motion_module_path: Path):
         loaded = load(motion_module_path, "cpu")
 
     is_v2 = "mid_block.motion_modules.0.temporal_transformer.norm.bias" in loaded
+    is_v2 = True
 
     loaded = None
     torch.cuda.empty_cache()
