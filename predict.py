@@ -247,7 +247,7 @@ class Predictor(BasePredictor):
         )
         sentry_sdk.set_context('host_machine', {'ip_address': Predictor.host_ip})
         sentry_sdk.set_context("input", {"prompt": prompt, "path": path, "fps": fps, "upscale_factor" : upscaleFactor})
-        sentry_sdk.set_tag("environment", "production") 
+        sentry_sdk.set_tag("environment", "production")
 
         try:
             #failes = 1 / 0
@@ -320,6 +320,7 @@ class Predictor(BasePredictor):
                     data['seed'] = [seed] # Need to fix this, causes error
                     data['steps'] = steps
                     data['ip_adapter_map']['is_face'] = face
+                    data['output']['fps'] = fps # For generating all frames without interpolation
                     if face:
                         controlnetStrength = 0.0
                         ipAdapterStrength = 0.7
