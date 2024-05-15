@@ -54,6 +54,7 @@ build:
     - "gitpython"
     - "mediapipe"
     - "xformers"
+    - "pillow"
     - "google-cloud-storage"
     - "git+https://github.com/brightlive/cog-cli.git@fps-generate-upscale"
     - "git+https://github.com/brightlive/cog-cli.git@fps-generate-upscale#egg=animatediff[stylize]"

@@ -13,6 +13,7 @@ import time
 from google.cloud import storage
 import sentry_sdk
 import requests
+from PIL import Image
 
 FAKE_PROMPT_TRAVEL_JSON = """
 {{
@@ -220,10 +221,12 @@ class Predictor(BasePredictor):
             choices=["mp4", "gif"],
         ),
         fps: int = Input(default=8, ge=1, le=60),
+        fps_output = Input(default=None, ge=1, le=60),
         controlnetStrength: float = Input(default=0.1, ge=0.0, le=1.0),
         ipAdapterStrength: float = Input(default=0.5, ge=0.0, le=1.0),
         face: bool = Input(default=False),
         referenceImg: str = Input(default=None),
+        bucket_name: str = Input(default="bright-live-ai.appspot.com"),
         upscaleFactor: int = Input(default=1, ge=1, le=4),
         seed: int = Input(
             description="Seed for different images and reproducibility. Use -1 to randomise seed",
@@ -246,14 +249,15 @@ class Predictor(BasePredictor):
             profiles_sample_rate=1.0,
         )
         sentry_sdk.set_context('host_machine', {'ip_address': Predictor.host_ip})
-        sentry_sdk.set_context("input", {"prompt": prompt, "path": path, "fps": fps, "upscale_factor" : upscaleFactor})
+        sentry_sdk.set_context("input", {"prompt": prompt, "path": path, "fps": fps, "fps_output": fps_output, "upscale_factor" : upscaleFactor})
         sentry_sdk.set_tag("environment", "production")
 
         try:
-            #failes = 1 / 0
-
             if height % 8 != 0 or width % 8 != 0:
                 raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
+
+            if fps_output == None:
+                fps_output = fps
 
             if path.upper() == "CUSTOM":
                 path = self.download_custom_model(custom_base_model_url)
@@ -271,7 +275,7 @@ class Predictor(BasePredictor):
                 img2video = True
                 os.system("mkdir input")
                 #os.system("cp brian512.png input/00000000.png") #temp
-                download_public_file("bright-live-ai.appspot.com", referenceImg, "input/00000000.png")
+                download_public_file(bucket_name, referenceImg, "input/00000000.png")
                 os.system("mkdir input/controlnet_normalbae")
                 for f in range(0, video_length):
                     os.system("cp input/00000000.png input/controlnet_normalbae/000000" + f"{f:02d}" + ".png")
@@ -295,7 +299,12 @@ class Predictor(BasePredictor):
                 parsed_data = [tuple(item.replace("(", "").replace(")", "").split(":")) for item in tags.split("),(")]
 
                 # Converting the value part of each tuple from string to float
-                parsed_data = [(label, float(value)) for label, value in parsed_data]
+                try:
+                    parsed_data = [(label, float(value)) for label, value in parsed_data]
+                except ValueError:
+                    # Log parsed_data to sentry
+                    sentry_sdk.capture_message("ValueError in parsing tags" + str(parsed_data))
+
 
                 # Sorting the list by value in descending order and selecting the first four items
                 # top = sorted(parsed_data, key=lambda x: x[1], reverse=True)[:4]
@@ -308,8 +317,10 @@ class Predictor(BasePredictor):
                 print("tags modified is " + tags_modified)
 
                 # ALWAYS SET CONTROLNET STRENGTH TO 0 FOR NOW, IP ADAPTER STRENGTH TO 0.7
-                controlnetStrength = 0.0
-                ipAdapterStrength = 0.7
+                # controlnetStrength = 0.0
+                # ipAdapterStrength = 0.7
+
+
 
                 with open('stylize.json', 'r', encoding='utf-8') as file:
                     data = json.load(file)
@@ -321,12 +332,12 @@ class Predictor(BasePredictor):
                     data['steps'] = steps
                     data['ip_adapter_map']['is_face'] = face
                     data['output']['fps'] = fps # For generating all frames without interpolation
-                    if face:
-                        controlnetStrength = 0.0
-                        ipAdapterStrength = 0.7
-                    else:
-                        controlnetStrength = 0.4
-                        ipAdapterStrength = 0.5
+                    # if face:
+                    #     controlnetStrength = 0.0
+                    #     ipAdapterStrength = 0.7
+                    # else:
+                    #     controlnetStrength = 0.4
+                    #     ipAdapterStrength = 0.5
                     data['controlnet_map']['controlnet_normalbae']['controlnet_conditioning_scale'] = controlnetStrength
                     data['ip_adapter_map']['scale'] = ipAdapterStrength
                     if ipAdapterStrength == 0.0:
@@ -368,9 +379,9 @@ class Predictor(BasePredictor):
                 "-c",
                 str(file_path),
                 "-W",
-                str(width),
+                str(512),
                 "-H",
-                str(height),
+                str(512),
                 "-L",
                 str(video_length),
                 "-C",
@@ -412,18 +423,54 @@ class Predictor(BasePredictor):
             else:
                 source_images_path = None  # or some other fallback in case there are no directories
 
+
+            if height > 512:
+                # Path to the subdirectory where the transformed images will be saved
+                portrait_images_path = os.path.join(source_images_path, "portrait")
+
+                # Create the "portrait" directory if it doesn't exist
+                if not os.path.exists(portrait_images_path):
+                    os.makedirs(portrait_images_path)
+
+                # Iterate over each file in the source images directory
+                for filename in os.listdir(source_images_path):
+                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
+                        # Construct the full file path
+                        file_path = os.path.join(source_images_path, filename)
+
+                        # Open the image
+                        image = Image.open(file_path)
+
+                        # Resize the image to 1920x1920
+                        upscaled_image = image.resize((2048, 2048), Image.ANTIALIAS)
+
+                        # Calculate the coordinates for a center crop of 1080x1920
+                        left = (2048 - width) / 2
+                        top = (2048 - height) / 2
+                        right = (2048 + width) / 2
+                        bottom = (2048 + height) / 2
+                        # left = 484
+                        # top = 64
+                        # right = 1564
+                        # bottom = 1984
+
+                        # Crop the image
+                        cropped_image = upscaled_image.crop((left, top, right, bottom))
+
+                        # Construct the path for the transformed image
+                        transformed_image_path = os.path.join(portrait_images_path, filename)
+
+                        # Save the transformed image
+                        cropped_image.save(transformed_image_path)
+
+                        print(f"Processed and saved: {filename}")
+                source_images_path = portrait_images_path
+
+
             out_path = Path(tempfile.mkdtemp()) / "output.mp4"
 
             interpolate = False #fps > 8
             if interpolate:
-                #rife_path = os.path.join("data", "rife")
-                #rife_path = os.path.abspath(rife_path)
-                #print("rife_path is " + str(rife_path))
-
-                #os.environ["PATH"] += os.pathsep + rife_path
-
-
-
                 rife_command = "animatediff rife interpolate -M " + str(fpsMultipler) + " -c h264 " + str(source_images_path)
                 print("rife_command is " + str(rife_command))
                 os.system(rife_command)
@@ -452,15 +499,19 @@ class Predictor(BasePredictor):
             media_path = os.path.join(recent_dir, media_files[0])
             print(f"Identified Media Path: {media_path}")
 
-            # Convert away from hev1 to more widely recognized codec
-            os.system(
-                "ffmpeg -i " + str(media_path) + " -movflags faststart -pix_fmt yuv420p -qp 17 " + str(out_path)
-            )
+            ffmpeg_command = "ffmpeg "
+            if fps != fps_output:
+                # New version for portrait output, use images in portrait folder to construct
+                ffmpeg_command = ffmpeg_command + f"-framerate {str(fps)} -i {source_images_path}/%08d.png -r {str(fps_output)} -movflags faststart -pix_fmt yuv420p -qp 17 {out_path}"
+            else:
+                #Convert away from hev1 to more widely recognized codec
+                ffmpeg_command = ffmpeg_command + "-i " + str(media_path) + " -movflags faststart -pix_fmt yuv420p -qp 17 " + str(out_path)
+            os.system(ffmpeg_command)
 
             parent_dir = os.path.dirname(media_path)
             grandparent_dir = os.path.dirname(parent_dir)
 
-            delete = True
+            delete = False
             if delete == True:
                 # Delete everything in output folder (including any prior gens that may be hanging around)
                 for item in os.listdir(grandparent_dir):
