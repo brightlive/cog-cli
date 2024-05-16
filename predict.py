@@ -47,6 +47,17 @@ FAKE_PROMPT_TRAVEL_JSON = """
 }}
 """
 
+def prepend_to_filename(tx, file_path):
+    # Extract the directory and file name from the path
+    directory, filename = os.path.split(file_path)
+
+    new_filename = tx + filename
+
+    # Construct the new path
+    new_file_path = os.path.join(directory, new_filename)
+
+    return new_file_path
+
 def download_public_file(bucket_name, source_blob_name, destination_file_name):
 
     storage_client = storage.Client.create_anonymous_client()
@@ -221,7 +232,7 @@ class Predictor(BasePredictor):
             choices=["mp4", "gif"],
         ),
         fps: int = Input(default=8, ge=1, le=60),
-        fps_output = Input(default=None, ge=1, le=60),
+        fps_output: int = Input(default=None, ge=1, le=60),
         controlnetStrength: float = Input(default=0.1, ge=0.0, le=1.0),
         ipAdapterStrength: float = Input(default=0.5, ge=0.0, le=1.0),
         face: bool = Input(default=False),
@@ -426,11 +437,11 @@ class Predictor(BasePredictor):
 
             if height > 512:
                 # Path to the subdirectory where the transformed images will be saved
-                portrait_images_path = os.path.join(source_images_path, "portrait")
+                upsized_images_path = os.path.join(source_images_path, "upsized")
 
                 # Create the "portrait" directory if it doesn't exist
-                if not os.path.exists(portrait_images_path):
-                    os.makedirs(portrait_images_path)
+                if not os.path.exists(upsized_images_path):
+                    os.makedirs(upsized_images_path)
 
                 # Iterate over each file in the source images directory
                 for filename in os.listdir(source_images_path):
@@ -441,30 +452,28 @@ class Predictor(BasePredictor):
                         # Open the image
                         image = Image.open(file_path)
 
-                        # Resize the image to 1920x1920
-                        upscaled_image = image.resize((2048, 2048), Image.ANTIALIAS)
+                        square_size = 1080
+                        if height > 1080 or width > 1080:
+                            square_size = 2048
+                        upscaled_image = image.resize((square_size, square_size), Image.ANTIALIAS)
 
                         # Calculate the coordinates for a center crop of 1080x1920
-                        left = (2048 - width) / 2
-                        top = (2048 - height) / 2
-                        right = (2048 + width) / 2
-                        bottom = (2048 + height) / 2
-                        # left = 484
-                        # top = 64
-                        # right = 1564
-                        # bottom = 1984
+                        left = (square_size - width) / 2
+                        top = (square_size - height) / 2
+                        right = (square_size + width) / 2
+                        bottom = (square_size + height) / 2
 
                         # Crop the image
                         cropped_image = upscaled_image.crop((left, top, right, bottom))
 
                         # Construct the path for the transformed image
-                        transformed_image_path = os.path.join(portrait_images_path, filename)
+                        transformed_image_path = os.path.join(upsized_images_path, filename)
 
                         # Save the transformed image
                         cropped_image.save(transformed_image_path)
 
                         print(f"Processed and saved: {filename}")
-                source_images_path = portrait_images_path
+                source_images_path = upsized_images_path
 
 
             out_path = Path(tempfile.mkdtemp()) / "output.mp4"
@@ -500,16 +509,17 @@ class Predictor(BasePredictor):
             print(f"Identified Media Path: {media_path}")
 
             ffmpeg_command = "ffmpeg "
-            if fps != fps_output:
-                # New version for portrait output, use images in portrait folder to construct
-                ffmpeg_command = ffmpeg_command + f"-framerate {str(fps)} -i {source_images_path}/%08d.png -r {str(fps_output)} -movflags faststart -pix_fmt yuv420p -qp 17 {out_path}"
-            else:
-                #Convert away from hev1 to more widely recognized codec
-                ffmpeg_command = ffmpeg_command + "-i " + str(media_path) + " -movflags faststart -pix_fmt yuv420p -qp 17 " + str(out_path)
+            ffmpeg_command = ffmpeg_command + f"-framerate {str(fps)} -i {source_images_path}/%08d.png -r {str(fps_output)} -movflags faststart -pix_fmt yuv420p -qp 17 {out_path}"
             os.system(ffmpeg_command)
 
             parent_dir = os.path.dirname(media_path)
             grandparent_dir = os.path.dirname(parent_dir)
+
+            print("out_path is " + str(out_path))
+            print("media_path is " + str(media_path))
+            ups_path = prepend_to_filename("ups-", media_path)
+
+            os.system(f"cp {str(out_path)} {str(ups_path)}")
 
             delete = False
             if delete == True:
