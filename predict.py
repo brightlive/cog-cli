@@ -47,6 +47,7 @@ FAKE_PROMPT_TRAVEL_JSON = """
 }}
 """
 
+
 def prepend_to_filename(tx, file_path):
     # Extract the directory and file name from the path
     directory, filename = os.path.split(file_path)
@@ -57,6 +58,7 @@ def prepend_to_filename(tx, file_path):
     new_file_path = os.path.join(directory, new_filename)
 
     return new_file_path
+
 
 def download_public_file(bucket_name, source_blob_name, destination_file_name):
 
@@ -72,11 +74,13 @@ def download_public_file(bucket_name, source_blob_name, destination_file_name):
         )
     )
 
+
 class Predictor(BasePredictor):
     host_ip = "none"
+
     def setup(self) -> None:
         """Load the model into memory to make running multiple predictions efficient"""
-        Predictor.host_ip = requests.get('http://169.254.169.254/latest/meta-data/public-ipv4').text
+        Predictor.host_ip = requests.get("http://169.254.169.254/latest/meta-data/public-ipv4").text
 
     def download_custom_model(self, custom_base_model_url: str):
         # Validate the custom_base_model_url to ensure it's from "civitai.com"
@@ -163,6 +167,12 @@ class Predictor(BasePredictor):
             default=512,
             ge=64,
             le=2160,
+        ),
+        ai_upscale: int = Input(
+            description="AI Upscaler to use, if any. 0 for traditional upscaling, 1 for tile-upscale and 2 for refine",
+            default=0,
+            ge=0,
+            le=2,
         ),
         path: str = Input(
             description="Choose the base model for animation generation. If 'CUSTOM' is selected, provide a custom model URL in the next parameter",
@@ -259,13 +269,24 @@ class Predictor(BasePredictor):
             # We recommend adjusting this value in production.
             profiles_sample_rate=1.0,
         )
-        sentry_sdk.set_context('host_machine', {'ip_address': Predictor.host_ip})
-        sentry_sdk.set_context("input", {"prompt": prompt, "path": path, "fps": fps, "fps_output": fps_output, "upscale_factor" : upscaleFactor})
+        sentry_sdk.set_context("host_machine", {"ip_address": Predictor.host_ip})
+        sentry_sdk.set_context(
+            "input",
+            {
+                "prompt": prompt,
+                "path": path,
+                "fps": fps,
+                "fps_output": fps_output,
+                "upscale_factor": upscaleFactor,
+            },
+        )
         sentry_sdk.set_tag("environment", "production")
 
         try:
             if height % 8 != 0 or width % 8 != 0:
-                raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
+                raise ValueError(
+                    f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
+                )
 
             if fps_output == None:
                 fps_output = fps
@@ -275,17 +296,17 @@ class Predictor(BasePredictor):
 
             start_time = time.time()
 
-            #print(f"{'-'*80}")
-            #print(prompt_travel_json)
-            #print(f"{'-'*80}")
+            # print(f"{'-'*80}")
+            # print(prompt_travel_json)
+            # print(f"{'-'*80}")
 
-            #file_path = "config/prompts/custom_prompt_travel.json"
+            # file_path = "config/prompts/custom_prompt_travel.json"
             file_path = "input/prompt.json"
 
             if referenceImg is not None and referenceImg != "":
                 img2video = True
                 os.system("mkdir input")
-                #os.system("cp brian512.png input/00000000.png") #temp
+                # os.system("cp brian512.png input/00000000.png") #temp
                 download_public_file(bucket_name, referenceImg, "input/00000000.png")
                 os.system("mkdir input/controlnet_normalbae")
                 for f in range(0, video_length):
@@ -293,21 +314,22 @@ class Predictor(BasePredictor):
 
                 # Tagging the input image
                 prompt_map = get_labels(
-                frame_dir="input",
-                interval=1,
-                general_threshold=0.35,
-                character_threshold=0.85,
-                ignore_tokens=[],
-                with_confidence=True,
-                is_danbooru_format=False,
-                is_cpu = False,
+                    frame_dir="input",
+                    interval=1,
+                    general_threshold=0.35,
+                    character_threshold=0.85,
+                    ignore_tokens=[],
+                    with_confidence=True,
+                    is_danbooru_format=False,
+                    is_cpu=False,
                 )
-                tags = str(prompt_map['0'])
+                tags = str(prompt_map["0"])
                 print("prompt_map is " + tags)
 
-
                 # Parsing the input string into tuples
-                parsed_data = [tuple(item.replace("(", "").replace(")", "").split(":")) for item in tags.split("),(")]
+                parsed_data = [
+                    tuple(item.replace("(", "").replace(")", "").split(":")) for item in tags.split("),(")
+                ]
 
                 # Remove any parsed items that have more than two items
                 parsed_data = [t for t in parsed_data if len(t) <= 2]
@@ -318,7 +340,6 @@ class Predictor(BasePredictor):
                 except ValueError:
                     # Log parsed_data to sentry
                     sentry_sdk.capture_message("ValueError in parsing tags" + str(parsed_data))
-
 
                 # Sorting the list by value in descending order and selecting the first four items
                 # top = sorted(parsed_data, key=lambda x: x[1], reverse=True)[:4]
@@ -334,50 +355,50 @@ class Predictor(BasePredictor):
                 # controlnetStrength = 0.0
                 # ipAdapterStrength = 0.7
 
-
-
-                with open('stylize.json', 'r', encoding='utf-8') as file:
+                with open("stylize.json", "r", encoding="utf-8") as file:
                     data = json.load(file)
-                    data['path'] = 'share/Stable-diffusion/' + path
-                    data['tail_prompt'] = tags_modified
-                    data['prompt_map']['0'] = prompt
-                    data['guidance_scale'] = guidance_scale
-                    data['seed'] = [seed] # Need to fix this, causes error
-                    data['steps'] = steps
-                    data['ip_adapter_map']['is_face'] = face
-                    data['output']['fps'] = fps # For generating all frames without interpolation
+                    data["path"] = "share/Stable-diffusion/" + path
+                    data["tail_prompt"] = tags_modified
+                    data["prompt_map"]["0"] = prompt
+                    data["guidance_scale"] = guidance_scale
+                    data["seed"] = [seed]  # Need to fix this, causes error
+                    data["steps"] = steps
+                    data["ip_adapter_map"]["is_face"] = face
+                    data["output"]["fps"] = fps  # For generating all frames without interpolation
                     # if face:
                     #     controlnetStrength = 0.0
                     #     ipAdapterStrength = 0.7
                     # else:
                     #     controlnetStrength = 0.4
                     #     ipAdapterStrength = 0.5
-                    data['controlnet_map']['controlnet_normalbae']['controlnet_conditioning_scale'] = controlnetStrength
-                    data['ip_adapter_map']['scale'] = ipAdapterStrength
+                    data["controlnet_map"]["controlnet_normalbae"][
+                        "controlnet_conditioning_scale"
+                    ] = controlnetStrength
+                    data["ip_adapter_map"]["scale"] = ipAdapterStrength
                     if ipAdapterStrength == 0.0:
-                        data['ip_adapter_map']['enable'] = False
+                        data["ip_adapter_map"]["enable"] = False
                     if controlnetStrength == 0.0:
-                        data['controlnet_map']['controlnet_normalbae']['enable'] = False
-                    with open(file_path, 'w', encoding='utf-8') as file:
+                        data["controlnet_map"]["controlnet_normalbae"]["enable"] = False
+                    with open(file_path, "w", encoding="utf-8") as file:
                         json.dump(data, file, indent=4)  # indent=4 for pretty printing
 
             else:
                 img2video = False
                 print("In non-img2video and steps is " + str(steps))
                 prompt_travel_json = FAKE_PROMPT_TRAVEL_JSON.format(
-                dreambooth_path=f"share/Stable-diffusion/{path}",
-                output_format=output_format,
-                seed=seed,
-                steps=steps,
-                guidance_scale=guidance_scale,
-                prompt_fixed_ratio=prompt_fixed_ratio,
-                head_prompt=prompt,
-                tail_prompt=tail_prompt,
-                negative_prompt=negative_prompt,
-                fps=fps, # Now generate all frames without interpolation
-                prompt_map=self.transform_prompt_map(prompt_map),
-                scheduler=scheduler,
-                clip_skip=clip_skip,
+                    dreambooth_path=f"share/Stable-diffusion/{path}",
+                    output_format=output_format,
+                    seed=seed,
+                    steps=steps,
+                    guidance_scale=guidance_scale,
+                    prompt_fixed_ratio=prompt_fixed_ratio,
+                    head_prompt=prompt,
+                    tail_prompt=tail_prompt,
+                    negative_prompt=negative_prompt,
+                    fps=fps,  # Now generate all frames without interpolation
+                    prompt_map=self.transform_prompt_map(prompt_map),
+                    scheduler=scheduler,
+                    clip_skip=clip_skip,
                 )
                 directory = os.path.dirname(file_path)
                 if not os.path.exists(directory):
@@ -385,7 +406,7 @@ class Predictor(BasePredictor):
                 with open(file_path, "w") as file:
                     file.write(prompt_travel_json)
 
-            fpsMultipler = 1 #int(fps / 8)
+            fpsMultipler = 1  # int(fps / 8)
 
             cmd = [
                 "animatediff",
@@ -428,8 +449,11 @@ class Predictor(BasePredictor):
             print(f"Identified directory: {recent_dir}")
 
             # Get the first subdirectory of recent_dir
-            directories = [d for d in os.listdir(recent_dir)
-                if os.path.isdir(os.path.join(recent_dir, d)) and d.startswith("00-")]
+            directories = [
+                d
+                for d in os.listdir(recent_dir)
+                if os.path.isdir(os.path.join(recent_dir, d)) and d.startswith("00-")
+            ]
 
             if directories:
                 source_images_path = os.path.join(recent_dir, directories[0])
@@ -437,37 +461,59 @@ class Predictor(BasePredictor):
             else:
                 source_images_path = None  # or some other fallback in case there are no directories
 
-
             if height > 512:
                 # Path to the subdirectory where the transformed images will be saved
                 upsized_images_path = os.path.join(source_images_path, "upsized")
 
-                # Create the "portrait" directory if it doesn't exist
+                # Create the directory if it doesn't exist
                 if not os.path.exists(upsized_images_path):
                     os.makedirs(upsized_images_path)
 
                 # Iterate over each file in the source images directory
                 for filename in os.listdir(source_images_path):
-                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
+                    if filename.lower().endswith((".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif")):
                         # Construct the full file path
                         file_path = os.path.join(source_images_path, filename)
 
                         # Open the image
                         image = Image.open(file_path)
 
-                        square_size = 1080
-                        if height > 1080 or width > 1080:
-                            square_size = 2048
-                        upscaled_image = image.resize((square_size, square_size), Image.ANTIALIAS)
+                        if ai_upscale == 0:
+                            # Naive upscaling way is below
+                            square_size = 1080
+                            if height > 1080 or width > 1080:
+                                square_size = 2048
+                            upscaled_image = image.resize((square_size, square_size), Image.ANTIALIAS)
 
-                        # Calculate the coordinates for a center crop of 1080x1920
-                        left = (square_size - width) / 2
-                        top = (square_size - height) / 2
-                        right = (square_size + width) / 2
-                        bottom = (square_size + height) / 2
+                            # Calculate the coordinates for a center crop of 1080x1920
+                            left = (square_size - width) / 2
+                            top = (square_size - height) / 2
+                            right = (square_size + width) / 2
+                            bottom = (square_size + height) / 2
 
-                        # Crop the image
-                        cropped_image = upscaled_image.crop((left, top, right, bottom))
+                            # Crop the image
+                            cropped_image = upscaled_image.crop((left, top, right, bottom))
+                        else:
+                            # The below simply crops it and does not upscale yet
+                            square_size = 512
+                            if width > height:
+                                # Landscape
+                                crop_height = (height / width) * square_size
+                                crop_width = square_size
+                            elif height > width:
+                                # Portrait
+                                crop_width = (width / height) * square_size
+                                crop_height = square_size
+                            else:
+                                crop_width = square_size
+                                crop_height = square_size
+
+                            left = (square_size - crop_width) / 2
+                            top = (square_size - crop_height) / 2
+                            right = (square_size + crop_width) / 2
+                            bottom = (square_size + crop_height) / 2
+
+                            cropped_image = image.crop((left, top, right, bottom))
 
                         # Construct the path for the transformed image
                         transformed_image_path = os.path.join(upsized_images_path, filename)
@@ -478,32 +524,46 @@ class Predictor(BasePredictor):
                         print(f"Processed and saved: {filename}")
                 source_images_path = upsized_images_path
 
-
             out_path = Path(tempfile.mkdtemp()) / "output.mp4"
 
-            interpolate = False #fps > 8
+            interpolate = False  # fps > 8
             if interpolate:
-                rife_command = "animatediff rife interpolate -M " + str(fpsMultipler) + " -c h264 " + str(source_images_path)
+                rife_command = (
+                    "animatediff rife interpolate -M "
+                    + str(fpsMultipler)
+                    + " -c h264 "
+                    + str(source_images_path)
+                )
                 print("rife_command is " + str(rife_command))
                 os.system(rife_command)
-                media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4")) and "rife" in f]
+                media_files = [
+                    f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4")) and "rife" in f
+                ]
             else:
                 media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4"))]
 
-            upscale = upscaleFactor > 1
-            if upscale:
-                upscale_command = "animatediff tile-upscale " + str(source_images_path) + " -c " + file_path + " -W " + str(512 * upscaleFactor)
-                print("upscale_command is " + str(upscale_command))
-                os.system(upscale_command)
-                recent_dir = max(
-                (
-                    os.path.join("upscaled", d)
-                    for d in os.listdir("upscaled")
-                    if os.path.isdir(os.path.join("upscaled", d))
-                ),
-                key=os.path.getmtime,
-            )
-                media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4"))]
+            # No longer using upscaleFactor
+            # upscale = upscaleFactor > 1
+            # if upscale:
+            #     upscale_command = (
+            #         "animatediff tile-upscale "
+            #         + str(source_images_path)
+            #         + " -c "
+            #         + file_path
+            #         + " -W "
+            #         + str(512 * upscaleFactor)
+            #     )
+            #     print("upscale_command is " + str(upscale_command))
+            #     os.system(upscale_command)
+            #     recent_dir = max(
+            #         (
+            #             os.path.join("upscaled", d)
+            #             for d in os.listdir("upscaled")
+            #             if os.path.isdir(os.path.join("upscaled", d))
+            #         ),
+            #         key=os.path.getmtime,
+            #     )
+            #     media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4"))]
 
             if not media_files:
                 raise ValueError(f"No GIF or MP4 files found in directory: {recent_dir}")
@@ -511,8 +571,29 @@ class Predictor(BasePredictor):
             media_path = os.path.join(recent_dir, media_files[0])
             print(f"Identified Media Path: {media_path}")
 
+            parent_dir = os.path.dirname(media_path)
+            grandparent_dir = os.path.dirname(parent_dir)
+
+            if ai_upscale > 0:
+                if ai_upscale == 1:
+                    os.system(
+                        f"animatediff tile-upscale {source_images_path} -c input/prompt.json -W {width}"
+                    )
+                elif ai_upscale == 2:
+                    os.system(f"animatediff refine {source_images_path} -c input/prompt.json  -W {width}")
+                    media_files = [f for f in os.listdir(recent_dir) if f.endswith((".gif", ".mp4"))]
+                    media_path = os.path.join(recent_dir, media_files[0])
+                    print(f"Identified Upscaled Media Path: {media_path}")
+                    refine_parent_dir = os.path.dirname(media_path)
+                    refne_grandparent_dir = os.path.dirname(parent_dir)
+            else:
+                refine_grandparent_dir = None
+
             ffmpeg_command = "ffmpeg "
-            ffmpeg_command = ffmpeg_command + f"-framerate {str(fps)} -i {source_images_path}/%08d.png -r {str(fps_output)} -movflags faststart -pix_fmt yuv420p -qp 17 {out_path}"
+            ffmpeg_command = (
+                ffmpeg_command
+                + f"-framerate {str(fps)} -i {source_images_path}/%08d.png -r {str(fps_output)} -movflags faststart -pix_fmt yuv420p -qp 17 {out_path}"
+            )
             os.system(ffmpeg_command)
 
             parent_dir = os.path.dirname(media_path)
@@ -535,6 +616,15 @@ class Predictor(BasePredictor):
                         os.remove(item_path)
                     elif os.path.isdir(item_path):
                         shutil.rmtree(item_path)
+                if refine_grandparent_dir:
+                    for item in os.listdir(refine_grandparent_dir):
+                        item_path = os.path.join(refine_grandparent_dir, item)
+                        print(f"Deleting item at path: {item_path}")
+                        # Check if it's a file or directory and delete accordingly
+                        if os.path.isfile(item_path):
+                            os.remove(item_path)
+                        elif os.path.isdir(item_path):
+                            shutil.rmtree(item_path)
 
             end_time = time.time()
 
@@ -546,7 +636,12 @@ class Predictor(BasePredictor):
                 print("referenceImg was " + str(referenceImg))
             else:
                 print("No referenceImg")
-            print("controlnetStrength was " + str(controlnetStrength) + " and ipAdapterStrength was " + str(ipAdapterStrength))
+            print(
+                "controlnetStrength was "
+                + str(controlnetStrength)
+                + " and ipAdapterStrength was "
+                + str(ipAdapterStrength)
+            )
             print("img2video was " + str(img2video) + " and interpolate was " + str(interpolate))
             print(f"Script execution time: {execution_time:.2f} seconds")
 
