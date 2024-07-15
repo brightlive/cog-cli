@@ -309,6 +309,9 @@ class Predictor(BasePredictor):
                 # Parsing the input string into tuples
                 parsed_data = [tuple(item.replace("(", "").replace(")", "").split(":")) for item in tags.split("),(")]
 
+                # Remove any parsed items that have more than two items
+                parsed_data = [t for t in parsed_data if len(t) <= 2]
+
                 # Converting the value part of each tuple from string to float
                 try:
                     parsed_data = [(label, float(value)) for label, value in parsed_data]
